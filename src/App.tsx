@@ -567,7 +567,7 @@ function AnalyticsPage() {
       {/* GitHub heatmap */}
       <div style={{ background: C.raised, borderRadius: 14, padding: '20px 24px', border: `1px solid ${C.border}`, marginBottom: 16 }}>
         <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 14 }}>GITHUB 활동 · {data.days}일</div>
-        {hasRows ? <GithubHeatmap data={ghData} /> : <EmptyChart height={54} label="GitHub 기록이 아직 없습니다." />}
+        {hasRows ? <GithubHeatmap data={ghData} /> : <EmptyChart height={54} />}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
@@ -586,7 +586,7 @@ function AnalyticsPage() {
                 <div style={{ width: `${a.pct}%`, height: '100%', background: a.color, borderRadius: 2 }} />
               </div>
             </div>
-          )) : <EmptyChart height={84} label="앱 사용 기록이 아직 없습니다." />}
+          )) : <EmptyChart height={84} />}
         </ChartCard>
 
         {/* Insights */}
@@ -597,7 +597,7 @@ function AnalyticsPage() {
                 <span style={{ fontSize: 12, color: C.mint, fontWeight: 700, minWidth: 14 }}>{ins.icon}</span>
                 <p style={{ margin: 0, fontSize: 11, color: C.muted, lineHeight: 1.6 }}>{ins.text}</p>
               </div>
-            )) : <EmptyChart height={84} label="기록이 쌓이면 패턴을 보여줍니다." />}
+            )) : <EmptyChart height={84} />}
           </div>
         </ChartCard>
       </div>
@@ -624,7 +624,7 @@ function Legend({ color, label }: { color: string; label: string }) {
   )
 }
 
-function EmptyChart({ height, label = '아직 기록된 데이터가 없습니다.' }: { height: number; label?: string }) {
+function EmptyChart({ height, label = '-' }: { height: number; label?: string }) {
   return (
     <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px dashed ${C.border2}`, borderRadius: 8, color: C.alt, fontSize: 11 }}>
       {label}
