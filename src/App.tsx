@@ -262,7 +262,7 @@ function DashboardPage({ setPage, currentDay }: { setPage: (p: Page) => void; cu
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 28 }}>
         {stats.map((s) => (
           <div key={s.id} style={{ background: C.raised, borderRadius: 14, padding: '18px 18px 14px', border: `1px solid ${C.border}` }}>
-            <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 10 }}>{s.label.toUpperCase()}</div>
+            <div style={{ fontSize: 11, color: C.soft, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 10, fontWeight: 700 }}>{s.label.toUpperCase()}</div>
             <div style={{ fontSize: 22, fontWeight: 800, color: C.white, letterSpacing: '-0.02em', marginBottom: 4, lineHeight: 1 }}>{s.value}</div>
             <div style={{ fontSize: 10, color: s.up ? C.mintMuted : C.faint, marginBottom: 12 }}>{s.sub}</div>
             {hasRecent ? <Sparkline data={s.spark} color={s.color} max={s.max} /> : <EmptyChart height={28} />}
@@ -274,7 +274,7 @@ function DashboardPage({ setPage, currentDay }: { setPage: (p: Page) => void; cu
       <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr 1fr', gap: 16 }}>
         {/* Device ring */}
         <div style={{ background: C.raised, borderRadius: 14, padding: '20px', border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 16, alignSelf: 'flex-start' }}>기기</div>
+          <div style={{ fontSize: 11, color: C.soft, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 16, alignSelf: 'flex-start', fontWeight: 700 }}>기기</div>
           <DeviceRing pcts={devPcts} />
           <div style={{ marginTop: 18, width: '100%' }}>
             {[
@@ -285,7 +285,7 @@ function DashboardPage({ setPage, currentDay }: { setPage: (p: Page) => void; cu
               <div key={d.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 9 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                   <div style={{ width: 6, height: 6, borderRadius: 1, background: d.color }} />
-                  <span style={{ fontSize: 11, color: C.alt }}>{d.label}</span>
+                  <span style={{ fontSize: 12, color: C.muted, fontWeight: 600 }}>{d.label}</span>
                 </div>
                 <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.muted }}>{d.val}</span>
               </div>
@@ -295,7 +295,7 @@ function DashboardPage({ setPage, currentDay }: { setPage: (p: Page) => void; cu
 
         {/* Timeline */}
         <div style={{ background: C.raised, borderRadius: 14, padding: '20px', border: `1px solid ${C.border}` }}>
-          <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 18 }}>오늘 타임라인</div>
+          <div style={{ fontSize: 11, color: C.soft, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 18, fontWeight: 700 }}>오늘 타임라인</div>
           <div style={{ position: 'relative', paddingLeft: 60 }}>
             <div style={{ position: 'absolute', left: 42, top: 4, bottom: 4, width: 1, background: C.border }} />
             {timeline.map((t, i) => (
@@ -310,7 +310,7 @@ function DashboardPage({ setPage, currentDay }: { setPage: (p: Page) => void; cu
 
         {/* App usage */}
         <div style={{ background: C.raised, borderRadius: 14, padding: '20px', border: `1px solid ${C.border}` }}>
-          <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 18 }}>앱 사용량</div>
+          <div style={{ fontSize: 11, color: C.soft, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 18, fontWeight: 700 }}>앱 사용량</div>
           {apps.map((a, i) => (
             <div key={a.name} style={{ marginBottom: 14 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
@@ -418,7 +418,7 @@ function TimelinePage({ currentDay }: { currentDay: number }) {
 
           {d ? [['PC', fmtMinutes(d.pc_minutes)], ['휴대폰', fmtMinutes(d.phone_minutes)], ['공부', fmtMinutes(d.focus_minutes)], ['수면', fmtMinutes(d.sleep_minutes)], ['걸음', d.steps.toLocaleString()]].map(([k, v]) => (
             <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 0', borderBottom: `1px solid ${C.border}` }}>
-              <span style={{ fontSize: 11, color: C.alt }}>{k}</span>
+              <span style={{ fontSize: 12, color: C.muted, fontWeight: 600 }}>{k}</span>
               <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: C.muted }}>{v}</span>
             </div>
           )) : <div style={{ fontSize: 12, color: C.alt, padding: '12px 0' }}>아직 저장된 기록이 없습니다.</div>}
@@ -450,7 +450,7 @@ function TimelinePage({ currentDay }: { currentDay: number }) {
 function DotScore({ label, value, color }: { label: string; value: number; color: string }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-      <span style={{ fontSize: 11, color: C.alt }}>{label}</span>
+      <span style={{ fontSize: 12, color: C.muted, fontWeight: 600 }}>{label}</span>
       <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
         {Array.from({ length: 10 }, (_, i) => (
           <div key={i} style={{ width: 7, height: 7, borderRadius: 1, background: i < value ? color : C.border2, transition: 'background 120ms' }} />
@@ -566,7 +566,7 @@ function AnalyticsPage() {
 
       {/* GitHub heatmap */}
       <div style={{ background: C.raised, borderRadius: 14, padding: '20px 24px', border: `1px solid ${C.border}`, marginBottom: 16 }}>
-        <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 14 }}>GITHUB 활동 · {data.days}일</div>
+        <div style={{ fontSize: 11, color: C.soft, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 14, fontWeight: 700 }}>GITHUB 활동 · {data.days}일</div>
         {hasRows ? <GithubHeatmap data={ghData} /> : <EmptyChart height={54} />}
       </div>
 
@@ -608,8 +608,8 @@ function AnalyticsPage() {
 function ChartCard({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
   return (
     <div style={{ background: C.raised, borderRadius: 14, padding: '20px', border: `1px solid ${C.border}` }}>
-      <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em' }}>{title}</div>
-      <div style={{ fontSize: 11, color: '#333', marginBottom: 14, marginTop: 1 }}>{subtitle}</div>
+      <div style={{ fontSize: 11, color: C.soft, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', fontWeight: 700 }}>{title}</div>
+      <div style={{ fontSize: 12, color: C.faint, marginBottom: 14, marginTop: 2 }}>{subtitle}</div>
       {children}
     </div>
   )
@@ -619,7 +619,7 @@ function Legend({ color, label }: { color: string; label: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
       <div style={{ width: 8, height: 2, borderRadius: 1, background: color }} />
-      <span style={{ fontSize: 10, color: C.alt }}>{label}</span>
+      <span style={{ fontSize: 12, color: C.muted, fontWeight: 600 }}>{label}</span>
     </div>
   )
 }
