@@ -189,7 +189,6 @@ function DashboardPage({ setPage, currentDay }: { setPage: (p: Page) => void; cu
     pc: recent.map((row) => row.pc_minutes / 60),
     phone: recent.map((row) => row.phone_minutes / 60),
     focus: recent.map((row) => row.focus_minutes / 60),
-    sleep: recent.map((row) => row.sleep_minutes / 60),
     steps: recent.map((row) => row.steps),
     exercise: recent.map((row) => row.exercise_minutes),
     development: recent.map((row) => row.development_minutes / 60),
@@ -199,7 +198,6 @@ function DashboardPage({ setPage, currentDay }: { setPage: (p: Page) => void; cu
     { id: 'pc', label: 'PC', value: parseHourValue(m.pc.display || '0h 00m'), sub: fmtDelta(m.pc.delta), up: m.pc.delta >= 0, spark: spark.pc, max: 10, color: C.mint },
     { id: 'phone', label: '휴대폰', value: parseHourValue(m.phone.display || '0h 00m'), sub: fmtDelta(m.phone.delta), up: m.phone.delta <= 0, spark: spark.phone, max: 10, color: C.faint },
     { id: 'focus', label: '공부', value: parseHourValue(m.focus.display || '0h 00m'), sub: fmtDelta(m.focus.delta), up: m.focus.delta >= 0, spark: spark.focus, max: 5, color: C.mint },
-    { id: 'sleep', label: '수면', value: parseHourValue(m.sleep.display || '0h 00m'), sub: fmtDelta(m.sleep.delta), up: m.sleep.delta >= 0, spark: spark.sleep, max: 9, color: C.mintMuted },
     { id: 'steps', label: '걸음', value: (m.steps.value || 0).toLocaleString(), sub: fmtDelta(m.steps.delta, ''), up: m.steps.delta >= 0, spark: spark.steps, max: 12000, color: C.mint },
     { id: 'ex', label: '운동', value: fmtMinutes(m.exercise.minutes || 0), sub: fmtDelta(m.exercise.delta), up: m.exercise.delta >= 0, spark: spark.exercise, max: 90, color: C.mintMuted },
     { id: 'dev', label: '개발', value: parseHourValue(m.development.display || '0h 00m'), sub: fmtDelta(m.development.delta), up: m.development.delta >= 0, spark: spark.development, max: 5, color: C.mintBright },
@@ -220,15 +218,14 @@ function DashboardPage({ setPage, currentDay }: { setPage: (p: Page) => void; cu
       .replace('School', '학교')
       .replace('Focus Session', '집중 세션')
       .replace('GitHub Commit', 'GitHub 커밋')
-      .replace('Sleep', '수면'),
+      .replace('Sleep', '휴식'),
     dot: event.type === 'development' ? C.mint : event.type === 'focus' ? C.mintBright : event.type === 'health' ? C.mintMuted : '#3a3a3a',
   }))
 
   const pcMinutes = m.pc.minutes ?? 0
   const phoneMinutes = m.phone.minutes ?? 0
-  const sleepMinutes = m.sleep.minutes ?? 0
-  const deviceTotal = pcMinutes + phoneMinutes + sleepMinutes
-  const devPcts = deviceTotal > 0 ? [pcMinutes / deviceTotal, phoneMinutes / deviceTotal, sleepMinutes / deviceTotal] : [0, 0, 0]
+  const deviceTotal = pcMinutes + phoneMinutes
+  const devPcts = deviceTotal > 0 ? [pcMinutes / deviceTotal, phoneMinutes / deviceTotal] : [0, 0]
 
   return (
     <div style={{ padding: '32px 36px', maxWidth: 1080 }}>
@@ -275,7 +272,6 @@ function DashboardPage({ setPage, currentDay }: { setPage: (p: Page) => void; cu
             {[
               { label: '노트북', val: parseHourValue(m.pc.display || '0h 00m'), color: C.mint },
               { label: '휴대폰',  val: parseHourValue(m.phone.display || '0h 00m'), color: C.mintMuted },
-              { label: '수면/워치',  val: parseHourValue(m.sleep.display || '0h 00m'), color: '#333' },
             ].map((d) => (
               <div key={d.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 9 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
@@ -411,7 +407,7 @@ function TimelinePage({ currentDay }: { currentDay: number }) {
           <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 4 }}>선택한 날짜</div>
           <div style={{ fontSize: 34, fontWeight: 900, color: C.white, letterSpacing: '-0.03em', marginBottom: 18 }}>{sel}일차</div>
 
-          {d ? [['PC', fmtMinutes(d.pc_minutes)], ['휴대폰', fmtMinutes(d.phone_minutes)], ['공부', fmtMinutes(d.focus_minutes)], ['수면', fmtMinutes(d.sleep_minutes)], ['걸음', d.steps.toLocaleString()]].map(([k, v]) => (
+          {d ? [['PC', fmtMinutes(d.pc_minutes)], ['휴대폰', fmtMinutes(d.phone_minutes)], ['공부', fmtMinutes(d.focus_minutes)], ['걸음', d.steps.toLocaleString()]].map(([k, v]) => (
             <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 0', borderBottom: `1px solid ${C.border}` }}>
               <span style={{ fontSize: 12, color: C.muted, fontWeight: 600 }}>{k}</span>
               <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: C.muted }}>{v}</span>
@@ -462,7 +458,6 @@ function AnalyticsPage() {
   const hasRows = rows.length > 0
   const screenPc = rows.map((row) => row.pc_minutes / 60)
   const screenPhone = rows.map((row) => row.phone_minutes / 60)
-  const sleepData = rows.map((row) => row.sleep_minutes / 60)
   const focusData = rows.map((row) => row.focus_minutes / 60)
   const stepsData = rows.map((row) => row.steps)
   const ghData = rows.map((row) => row.github_commits)
@@ -506,15 +501,6 @@ function AnalyticsPage() {
             <Legend color="#3a3a3a" label="휴대폰" />
           </div>
           {hasRows ? <DualLineChart a={screenPc} b={screenPhone} maxVal={10} colorA={C.mint} colorB="#4a4a4a" h={90} /> : <EmptyChart height={90} />}
-        </ChartCard>
-
-        {/* Sleep */}
-        <ChartCard title="수면" subtitle="시간 / 밤">
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12 }}>
-            <span style={{ fontSize: 26, fontWeight: 800, color: C.white }}>{avg(sleepData).toFixed(1)}시간</span>
-            <span style={{ fontSize: 10, color: C.mintMuted }}>평균</span>
-          </div>
-          {hasRows ? <AreaChart data={sleepData} maxVal={9} color={C.mintMuted} h={90} /> : <EmptyChart height={90} />}
         </ChartCard>
 
         {/* Focus */}
@@ -932,14 +918,20 @@ function ResultPage() {
 
   const summaryData = data.rows.map((row) => row.focus_minutes / 60)
   const hasRows = data.rows.length > 0
-  const totalHours = Math.round((data.totals.pc_minutes + data.totals.phone_minutes + data.totals.focus_minutes + data.totals.sleep_minutes + data.totals.exercise_minutes) / 60)
-  const bigStats = [
-    { label: '수면', val: `${Math.round(data.totals.sleep_minutes / 60)}시간`, color: C.mintMuted },
-    { label: 'PC', val: `${Math.round(data.totals.pc_minutes / 60)}시간`, color: C.mint },
-    { label: '휴대폰', val: `${Math.round(data.totals.phone_minutes / 60)}시간`, color: C.faint },
-    { label: '공부', val: `${Math.round(data.totals.focus_minutes / 60)}시간`, color: C.mintBright },
-    { label: '개발', val: `${Math.round(data.totals.development_minutes / 60)}시간`, color: C.mint },
-    { label: '운동', val: `${Math.round(data.totals.exercise_minutes / 60)}시간`, color: C.mintMuted },
+  const trackedMinutes = data.totals.pc_minutes + data.totals.phone_minutes + data.totals.focus_minutes + data.totals.development_minutes + data.totals.exercise_minutes
+  const totalHours = Math.round(trackedMinutes / 60)
+  const activityTotals = [
+    { label: 'PC 사용', minutes: data.totals.pc_minutes, color: C.mint },
+    { label: '휴대폰 사용', minutes: data.totals.phone_minutes, color: C.faint },
+    { label: '공부', minutes: data.totals.focus_minutes, color: C.mintBright },
+    { label: '개발', minutes: data.totals.development_minutes, color: C.mint },
+    { label: '운동', minutes: data.totals.exercise_minutes, color: C.mintMuted },
+  ]
+  const maxActivityMinutes = Math.max(1, ...activityTotals.map((item) => item.minutes))
+  const activityStats = [
+    ...activityTotals.map((item) => ({ label: item.label, val: fmtMinutes(item.minutes), pct: Math.round((item.minutes / maxActivityMinutes) * 100), color: item.color })),
+    { label: '걸음', val: `${data.totals.steps.toLocaleString()}보`, pct: 0, color: C.white },
+    { label: 'GitHub', val: `${data.totals.github_commits.toLocaleString()}커밋`, pct: 0, color: C.mint },
   ]
   const pct = (first: number, last: number, invert = false) => {
     const delta = first ? Math.round(((last - first) / first) * 100) : 0
@@ -949,12 +941,10 @@ function ResultPage() {
   const phone = pct(data.first.phone_minutes, data.last.phone_minutes, true)
   const focus = pct(data.first.focus_minutes, data.last.focus_minutes)
   const dev = pct(data.first.development_minutes, data.last.development_minutes)
-  const sleep = pct(data.first.sleep_minutes, data.last.sleep_minutes)
   const compare = [
     { label: '휴대폰 사용량', d1: fmtMinutes(data.first.phone_minutes), d100: fmtMinutes(data.last.phone_minutes), ...phone },
     { label: '공부 시간', d1: fmtMinutes(data.first.focus_minutes), d100: fmtMinutes(data.last.focus_minutes), ...focus },
     { label: '개발 시간', d1: fmtMinutes(data.first.development_minutes), d100: fmtMinutes(data.last.development_minutes), ...dev },
-    { label: '수면', d1: fmtMinutes(data.first.sleep_minutes), d100: fmtMinutes(data.last.sleep_minutes), ...sleep },
   ]
 
   return (
@@ -967,7 +957,7 @@ function ResultPage() {
 
         <div style={{ fontSize: 60, fontWeight: 900, color: C.white, letterSpacing: '-0.03em', lineHeight: 1 }}>{totalHours.toLocaleString()}</div>
         <div style={{ fontSize: 14, fontWeight: 900, color: C.white, letterSpacing: '0.1em', marginBottom: 4 }}>시간</div>
-        <div style={{ fontSize: 11, color: C.alt }}>삶의 100일을 기록했습니다</div>
+        <div style={{ fontSize: 11, color: C.alt }}>1~100일 동안 기록된 활동 총합입니다</div>
 
         {/* mini trend */}
         <div style={{ maxWidth: 500, margin: '28px auto 0', opacity: 0.6 }}>
@@ -976,23 +966,23 @@ function ResultPage() {
         <div style={{ fontSize: 10, color: '#333', fontFamily: "'JetBrains Mono', monospace", marginTop: 4 }}>공부 시간 — 실제 기록 기반</div>
       </div>
 
-      {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 12 }}>
-        {bigStats.map(s => (
-          <div key={s.label} style={{ background: C.raised, borderRadius: 14, padding: '22px', border: `1px solid ${C.border}`, textAlign: 'center' }}>
-            <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 6 }}>{s.label.toUpperCase()}</div>
-            <div style={{ fontSize: 36, fontWeight: 900, color: s.color, letterSpacing: '-0.03em' }}>{s.val}</div>
-          </div>
-        ))}
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 40 }}>
-        <div style={{ background: C.raised, borderRadius: 14, padding: '20px 24px', border: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: 11, color: C.alt }}>총 걸음 수</span>
-          <span style={{ fontSize: 28, fontWeight: 900, color: C.white, letterSpacing: '-0.02em' }}>{data.totals.steps.toLocaleString()}</span>
-        </div>
-        <div style={{ background: C.raised, borderRadius: 14, padding: '20px 24px', border: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: 11, color: C.alt }}>GitHub 커밋</span>
-          <span style={{ fontSize: 28, fontWeight: 900, color: C.mint, letterSpacing: '-0.02em' }}>{data.totals.github_commits.toLocaleString()}</span>
+      {/* Totals */}
+      <div style={{ background: C.raised, borderRadius: 14, padding: '28px', border: `1px solid ${C.border}`, marginBottom: 40 }}>
+        <div style={{ fontSize: 11, color: C.soft, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 20, fontWeight: 700 }}>1~100일 활동 총합</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 14 }}>
+          {activityStats.map((s) => (
+            <div key={s.label} style={{ background: C.surface, borderRadius: 12, padding: '18px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, marginBottom: s.pct ? 12 : 0 }}>
+                <span style={{ fontSize: 12, color: C.muted, fontWeight: 700 }}>{s.label}</span>
+                <span style={{ fontSize: 22, fontWeight: 900, color: s.color, letterSpacing: '-0.02em' }}>{s.val}</span>
+              </div>
+              {s.pct > 0 && (
+                <div style={{ height: 4, background: C.border, borderRadius: 4 }}>
+                  <div style={{ width: `${s.pct}%`, height: '100%', background: s.color, borderRadius: 4 }} />
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       </div>
 

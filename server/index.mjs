@@ -100,7 +100,6 @@ const server = http.createServer(async (req, res) => {
           pc: { minutes: metric.pc_minutes, display: formatMinutes(metric.pc_minutes), delta: metric.pc_minutes - prev.pc_minutes },
           phone: { minutes: metric.phone_minutes, display: formatMinutes(metric.phone_minutes), delta: metric.phone_minutes - prev.phone_minutes },
           focus: { minutes: metric.focus_minutes, display: formatMinutes(metric.focus_minutes), delta: metric.focus_minutes - prev.focus_minutes },
-          sleep: { minutes: metric.sleep_minutes, display: formatMinutes(metric.sleep_minutes), delta: metric.sleep_minutes - prev.sleep_minutes },
           steps: { value: metric.steps, delta: metric.steps - prev.steps },
           exercise: { minutes: metric.exercise_minutes, delta: metric.exercise_minutes - prev.exercise_minutes },
           development: { minutes: metric.development_minutes, display: formatMinutes(metric.development_minutes), delta: metric.development_minutes - prev.development_minutes },
@@ -164,7 +163,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/result') {
       const totals = db.prepare(`SELECT
         COALESCE(SUM(pc_minutes), 0) pc_minutes, COALESCE(SUM(phone_minutes), 0) phone_minutes, COALESCE(SUM(focus_minutes), 0) focus_minutes,
-        COALESCE(SUM(sleep_minutes), 0) sleep_minutes, COALESCE(SUM(steps), 0) steps, COALESCE(SUM(exercise_minutes), 0) exercise_minutes,
+        COALESCE(SUM(steps), 0) steps, COALESCE(SUM(exercise_minutes), 0) exercise_minutes,
         COALESCE(SUM(development_minutes), 0) development_minutes, COALESCE(SUM(github_commits), 0) github_commits
         FROM daily_metrics`).get()
       const first = getMetric(1), last = getMetric(currentDay())

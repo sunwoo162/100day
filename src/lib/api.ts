@@ -11,7 +11,7 @@ export type DashboardMetric = {
 export type DashboardData = {
   day: number
   date: string
-  metrics: Record<'pc' | 'phone' | 'focus' | 'sleep' | 'steps' | 'exercise' | 'development' | 'github', DashboardMetric>
+  metrics: Record<'pc' | 'phone' | 'focus' | 'steps' | 'exercise' | 'development' | 'github', DashboardMetric>
   apps: { name: string; source: string; minutes: number }[]
   events: { time: string; label: string; type: string }[]
   recent: TimelineEntry[]
@@ -33,7 +33,6 @@ export type TimelineEntry = {
   pc_minutes: number
   phone_minutes: number
   focus_minutes: number
-  sleep_minutes: number
   steps: number
   exercise_minutes: number
   development_minutes: number
@@ -76,7 +75,6 @@ export type ResultData = {
     pc_minutes: number
     phone_minutes: number
     focus_minutes: number
-    sleep_minutes: number
     steps: number
     exercise_minutes: number
     development_minutes: number
