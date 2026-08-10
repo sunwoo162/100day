@@ -356,7 +356,7 @@ function TimelinePage({ currentDay }: { currentDay: number }) {
   const maxUsageMinutes = Math.max(1, ...rows.map((row) => usageMinutes(row)))
   const heatColor = (minutes: number, future: boolean, today: boolean, selected: boolean) => {
     if (future) return '#111'
-    if (minutes <= 0) return selected ? '#1f2a28' : '#171717'
+    if (minutes <= 0) return '#141414'
     const ratio = minutes / maxUsageMinutes
     if (today) return C.mint
     if (ratio >= 0.75) return '#00e8c5'
@@ -392,8 +392,8 @@ function TimelinePage({ currentDay }: { currentDay: number }) {
                   aspectRatio: '1', borderRadius: 6, border: 'none',
                   cursor: future ? 'default' : 'pointer',
                   background: heatColor(minutes, future, today, selected),
-                  color: today ? C.ink : minutes > 0 ? C.soft : '#3a3a3a',
-                  fontSize: 10, fontFamily: "'JetBrains Mono', monospace",
+                  color: future ? '#4a4a4a' : minutes > 0 && today ? C.ink : minutes > 0 ? C.white : C.faint,
+                  fontSize: 11, fontFamily: "'JetBrains Mono', monospace",
                   fontWeight: today ? 700 : 400,
                   opacity: future ? 0.3 : 1,
                   outline: selected && !today ? `1px solid ${C.mint}` : 'none',
@@ -408,7 +408,7 @@ function TimelinePage({ currentDay }: { currentDay: number }) {
           </div>
           {/* legend */}
           <div style={{ display: 'flex', gap: 14, marginTop: 16, flexWrap: 'wrap' }}>
-            {[{ col: '#171717', lbl: '기록 없음' }, { col: '#15524d', lbl: '적음' }, { col: '#087d70', lbl: '보통' }, { col: '#00bfa5', lbl: '많음' }, { col: C.mint, lbl: '최대/오늘' }].map(l => (
+            {[{ col: '#141414', lbl: '기록 없음' }, { col: '#15524d', lbl: '적음' }, { col: '#087d70', lbl: '보통' }, { col: '#00bfa5', lbl: '많음' }, { col: C.mint, lbl: '최대/오늘' }].map(l => (
               <div key={l.lbl} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <div style={{ width: 8, height: 8, borderRadius: 2, background: l.col }} />
                 <span style={{ fontSize: 10, color: C.alt }}>{l.lbl}</span>
