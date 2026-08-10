@@ -61,9 +61,15 @@ CREATE TABLE IF NOT EXISTS focus_sessions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   day_number INTEGER NOT NULL,
   category TEXT NOT NULL,
+  note TEXT NOT NULL DEFAULT '',
   started_at TEXT NOT NULL,
   ended_at TEXT,
   duration_minutes INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS study_categories (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS checkins (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -74,6 +80,16 @@ CREATE TABLE IF NOT EXISTS checkins (
   created_at TEXT NOT NULL
 );
 `)
+
+const focusColumns = db.prepare('PRAGMA table_info(focus_sessions)').all().map(column => column.name)
+if (!focusColumns.includes('note')) db.exec("ALTER TABLE focus_sessions ADD COLUMN note TEXT NOT NULL DEFAULT ''")
+
+if (db.prepare('SELECT COUNT(*) AS count FROM study_categories').get().count === 0) {
+  const insertCategory = db.prepare('INSERT INTO study_categories (name, created_at) VALUES (?, ?)')
+  for (const name of ['개발', '코딩 테스트', '학교 공부', '자격증', '독서', '운동', '휴식', '기타']) {
+    insertCategory.run(name, new Date().toISOString())
+  }
+}
 
 export function isSeeded() {
   return db.prepare('SELECT COUNT(*) AS count FROM daily_metrics').get().count > 0

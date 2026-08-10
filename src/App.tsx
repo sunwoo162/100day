@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { api, type AnalyticsData, type DashboardData, type DeviceData, type FocusSession, type ResultData, type TimelineEntry } from './lib/api'
+import { api, type AnalyticsData, type DashboardData, type DeviceData, type FocusSession, type ResultData, type StudyCategory, type TimelineEntry } from './lib/api'
 
 type Page = 'dashboard' | 'timeline' | 'analytics' | 'focus' | 'devices' | 'checkin' | 'result'
 
@@ -26,7 +26,7 @@ const NAV: { id: Page; label: string; Icon: (p: { active: boolean }) => React.Re
   { id: 'dashboard', label: '개요',  Icon: ({ active }) => <IcoGrid   c={active ? C.mint : '#4a4a4a'} /> },
   { id: 'timeline',  label: '타임라인',  Icon: ({ active }) => <IcoCalendar c={active ? C.mint : '#4a4a4a'} /> },
   { id: 'analytics', label: '분석', Icon: ({ active }) => <IcoChart  c={active ? C.mint : '#4a4a4a'} /> },
-  { id: 'focus',     label: '집중',     Icon: ({ active }) => <IcoTimer  c={active ? C.mint : '#4a4a4a'} /> },
+  { id: 'focus',     label: '공부',     Icon: ({ active }) => <IcoTimer  c={active ? C.mint : '#4a4a4a'} /> },
   { id: 'devices',   label: '기기',   Icon: ({ active }) => <IcoDevice c={active ? C.mint : '#4a4a4a'} /> },
 ]
 
@@ -157,7 +157,7 @@ function NavBtn({ active, onClick, children }: { active: boolean; onClick: () =>
 }
 
 function MobileTopbar({ page, onMenu }: { page: Page; onMenu: () => void }) {
-  const titles: Record<Page, string> = { dashboard: '개요', timeline: '타임라인', analytics: '분석', focus: '집중', devices: '기기', checkin: '오늘 체크인', result: '100일 결과' }
+  const titles: Record<Page, string> = { dashboard: '개요', timeline: '타임라인', analytics: '분석', focus: '공부', devices: '기기', checkin: '오늘 체크인', result: '100일 결과' }
   return (
     <div className="mobile-header" style={{ display: 'none', padding: '14px 20px', borderBottom: `1px solid ${C.border}`, background: C.surface, alignItems: 'center', gap: 12 }}>
       <button onClick={onMenu} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}><IcoMenu c={C.muted} /></button>
@@ -639,17 +639,25 @@ function FocusPage() {
   const [running, setRunning] = useState(false)
   const [secs, setSecs] = useState(0)
   const [cat, setCat] = useState('개발')
+  const [newCat, setNewCat] = useState('')
+  const [note, setNote] = useState('')
   const [startedAt, setStartedAt] = useState<string | null>(null)
   const [sessions, setSessions] = useState<FocusSession[]>([])
+  const [categories, setCategories] = useState<StudyCategory[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const ref = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const cats = ['개발', '코딩 테스트', '학교 공부', '자격증', '독서', '기타']
   const totalMins = sessions.reduce((a, s) => a + s.duration_minutes, 0) + Math.floor(secs / 60)
 
   useEffect(() => {
     api.focusSessions(37).then(setSessions).catch((err) => setError(err.message))
+    api.studyCategories()
+      .then((items) => {
+        setCategories(items)
+        if (items[0]) setCat(items[0].name)
+      })
+      .catch((err) => setError(err.message))
   }, [])
 
   useEffect(() => {
@@ -679,17 +687,31 @@ function FocusPage() {
       const saved = await api.addFocusSession({
         day_number: 37,
         category: cat,
+        note,
         started_at: startedAt,
         ended_at: new Date().toISOString(),
         duration_minutes: Math.max(1, Math.round(secs / 60)),
       })
       setSessions((items) => [...items, saved])
       setStartedAt(null)
+      setNote('')
       setSecs(0)
     } catch (err) {
       setError(err instanceof Error ? err.message : '집중 세션 저장 실패')
     } finally {
       setSaving(false)
+    }
+  }
+  const addCategory = async () => {
+    const name = newCat.trim()
+    if (!name) return
+    try {
+      const saved = await api.addStudyCategory({ name })
+      setCategories((items) => items.some((item) => item.name === saved.name) ? items : [...items, saved])
+      setCat(saved.name)
+      setNewCat('')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '카테고리 추가 실패')
     }
   }
   const goalMins = 240
@@ -699,7 +721,7 @@ function FocusPage() {
       {error && <div style={{ color: C.mintMuted, fontSize: 12, marginBottom: 16 }}>{error}</div>}
       {/* Big timer */}
       <div style={{ textAlign: 'center', marginBottom: 40 }}>
-        <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.2em', marginBottom: 28 }}>집중 세션</div>
+        <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.2em', marginBottom: 28 }}>공부 기록</div>
 
         {/* ring around timer */}
         <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 24 }}>
@@ -713,26 +735,37 @@ function FocusPage() {
             }}>
               {fmt(secs)}
             </div>
-            {running && <div style={{ fontSize: 11, color: C.alt, marginTop: 6 }}>{cat}</div>}
+            {running && <div style={{ fontSize: 11, color: C.alt, marginTop: 6 }}>{cat}{note ? ` · ${note}` : ''}</div>}
           </div>
         </div>
 
         {!running && (
           <div style={{ marginBottom: 28 }}>
-            <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.1em', marginBottom: 12 }}>카테고리</div>
+            <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.1em', marginBottom: 12 }}>지금 하는 일</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
-              {cats.map(c => (
-                <button key={c} onClick={() => setCat(c)} style={{
+              {categories.map(c => (
+                <button key={c.id} onClick={() => setCat(c.name)} style={{
                   padding: '7px 14px', borderRadius: 30, cursor: 'pointer', transition: 'all 120ms',
-                  border: `1px solid ${cat === c ? C.mint : C.border2}`,
-                  background: cat === c ? 'rgba(0,232,197,0.08)' : 'transparent',
-                  color: cat === c ? C.mint : C.alt,
+                  border: `1px solid ${cat === c.name ? C.mint : C.border2}`,
+                  background: cat === c.name ? 'rgba(0,232,197,0.08)' : 'transparent',
+                  color: cat === c.name ? C.mint : C.alt,
                   fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12,
                 }}>
-                  {c}
+                  {c.name}
                 </button>
               ))}
             </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+              <input value={newCat} onChange={e => setNewCat(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addCategory() }}
+                placeholder="새 활동 추가: 예) 수학 문제풀이"
+                style={{ flex: 1, padding: '10px 12px', background: C.raised, border: `1px solid ${C.border2}`, borderRadius: 8, color: C.white, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, outline: 'none' }}
+              />
+              <button onClick={addCategory} style={{ padding: '0 14px', borderRadius: 8, border: 'none', background: C.chip, color: C.mint, cursor: 'pointer', fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12 }}>추가</button>
+            </div>
+            <input value={note} onChange={e => setNote(e.target.value)}
+              placeholder="노트북/휴대폰 없이 하는 일을 적어두기"
+              style={{ width: '100%', marginTop: 10, padding: '10px 12px', background: C.raised, border: `1px solid ${C.border2}`, borderRadius: 8, color: C.white, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, outline: 'none' }}
+            />
           </div>
         )}
 
@@ -745,7 +778,7 @@ function FocusPage() {
           fontSize: 13, fontWeight: 700, letterSpacing: '0.06em',
           transition: 'all 120ms',
         }}>
-          {saving ? '저장 중...' : running ? '중지하고 저장' : '집중 시작'}
+          {saving ? '저장 중...' : running ? '중지하고 저장' : '공부 시작'}
         </button>
       </div>
 
@@ -763,7 +796,7 @@ function FocusPage() {
       </div>
 
       {/* Sessions */}
-      <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 12 }}>오늘 세션</div>
+      <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 12 }}>오늘 공부 기록</div>
       {sessions.map((s, i) => (
         <div key={i} style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -775,6 +808,7 @@ function FocusPage() {
             <div>
               <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.alt, marginBottom: 3 }}>{toClock(s.started_at)} - {toClock(s.ended_at)}</div>
               <div style={{ fontSize: 13, color: C.muted }}>{s.category.replace('Development', '개발').replace('Coding Test', '코딩 테스트')}</div>
+              {s.note && <div style={{ fontSize: 11, color: C.alt, marginTop: 3 }}>{s.note}</div>}
             </div>
           </div>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, color: C.mint, fontWeight: 600 }}>{fmtMinutes(s.duration_minutes)}</div>

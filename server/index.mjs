@@ -77,6 +77,19 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, db.prepare('SELECT * FROM devices ORDER BY id').all())
     }
 
+    if (url.pathname === '/api/study/categories' && req.method === 'GET') {
+      const categories = db.prepare('SELECT id, name FROM study_categories ORDER BY id').all()
+      return json(res, 200, categories)
+    }
+
+    if (url.pathname === '/api/study/categories' && req.method === 'POST') {
+      const body = await readBody(req)
+      const name = String(body.name || '').trim()
+      if (!name) return json(res, 400, { error: '카테고리 이름이 필요합니다' })
+      db.prepare('INSERT OR IGNORE INTO study_categories (name, created_at) VALUES (?, ?)').run(name, new Date().toISOString())
+      return json(res, 201, db.prepare('SELECT id, name FROM study_categories WHERE name = ?').get(name))
+    }
+
     if (url.pathname === '/api/focus/sessions' && req.method === 'GET') {
       const day = Number(url.searchParams.get('day') || 37)
       return json(res, 200, db.prepare('SELECT * FROM focus_sessions WHERE day_number = ? ORDER BY started_at').all(day))
@@ -86,11 +99,13 @@ const server = http.createServer(async (req, res) => {
       const body = await readBody(req)
       const day = Number(body.day_number || 37)
       const category = String(body.category || '기타')
+      const note = String(body.note || '')
       const started = body.started_at || new Date().toISOString()
       const ended = body.ended_at || new Date().toISOString()
       const duration = Number(body.duration_minutes || 0)
-      const result = db.prepare('INSERT INTO focus_sessions (day_number, category, started_at, ended_at, duration_minutes) VALUES (?, ?, ?, ?, ?)').run(day, category, started, ended, duration)
-      return json(res, 201, { id: Number(result.lastInsertRowid), day_number: day, category, started_at: started, ended_at: ended, duration_minutes: duration })
+      db.prepare('INSERT OR IGNORE INTO study_categories (name, created_at) VALUES (?, ?)').run(category, new Date().toISOString())
+      const result = db.prepare('INSERT INTO focus_sessions (day_number, category, note, started_at, ended_at, duration_minutes) VALUES (?, ?, ?, ?, ?, ?)').run(day, category, note, started, ended, duration)
+      return json(res, 201, { id: Number(result.lastInsertRowid), day_number: day, category, note, started_at: started, ended_at: ended, duration_minutes: duration })
     }
 
     if (url.pathname === '/api/checkins' && req.method === 'GET') {

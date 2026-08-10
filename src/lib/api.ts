@@ -52,9 +52,15 @@ export type FocusSession = {
   id: number
   day_number: number
   category: string
+  note: string
   started_at: string
   ended_at: string | null
   duration_minutes: number
+}
+
+export type StudyCategory = {
+  id: number
+  name: string
 }
 
 export type CheckinData = {
@@ -97,6 +103,8 @@ export const api = {
   timeline: () => request<TimelineEntry[]>('/timeline'),
   analytics: (days = 30) => request<AnalyticsData>(`/analytics?days=${days}`),
   devices: () => request<DeviceData[]>('/devices'),
+  studyCategories: () => request<StudyCategory[]>('/study/categories'),
+  addStudyCategory: (data: { name: string }) => request<StudyCategory>('/study/categories', { method: 'POST', body: JSON.stringify(data) }),
   focusSessions: (day = 37) => request<FocusSession[]>(`/focus/sessions?day=${day}`),
   addFocusSession: (data: unknown) => request<FocusSession>('/focus/sessions', { method: 'POST', body: JSON.stringify(data) }),
   checkin: (day = 37) => request<CheckinData>(`/checkins?day=${day}`),

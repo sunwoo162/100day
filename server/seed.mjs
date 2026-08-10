@@ -19,6 +19,7 @@ export function seed() {
   const insertUsage = db.prepare('INSERT INTO app_usage (day_number, source, app_name, minutes) VALUES (?, ?, ?, ?)')
   const insertEvent = db.prepare('INSERT INTO timeline_events (day_number, time, label, type) VALUES (?, ?, ?, ?)')
   const insertCheckin = db.prepare('INSERT INTO checkins (day_number, focus_score, satisfaction_score, note, created_at) VALUES (?, ?, ?, ?, ?)')
+  const insertStudyCategory = db.prepare('INSERT OR IGNORE INTO study_categories (name, created_at) VALUES (?, ?)')
 
   db.exec('BEGIN')
   try {
@@ -62,6 +63,9 @@ export function seed() {
     insertFocus.run(37, 'Development', '2026-08-10T09:21:00+09:00', '2026-08-10T10:13:00+09:00', 52)
     insertFocus.run(37, 'Development', '2026-08-10T16:10:00+09:00', '2026-08-10T17:42:00+09:00', 92)
     insertFocus.run(37, 'Coding Test', '2026-08-10T22:03:00+09:00', '2026-08-10T22:41:00+09:00', 38)
+    for (const name of ['개발', '코딩 테스트', '학교 공부', '자격증', '독서', '운동', '휴식', '기타']) {
+      insertStudyCategory.run(name, new Date().toISOString())
+    }
     db.exec('COMMIT')
   } catch (e) {
     db.exec('ROLLBACK')
