@@ -351,6 +351,19 @@ function TimelinePage({ currentDay }: { currentDay: number }) {
 
   const completedDays = currentDay
   const d = rows.find((row) => row.day_number === sel) ?? rows[0]
+  const rowByDay = new Map(rows.map((row) => [row.day_number, row]))
+  const usageMinutes = (row?: TimelineEntry) => row ? row.pc_minutes + row.phone_minutes + row.focus_minutes + row.development_minutes + row.exercise_minutes : 0
+  const maxUsageMinutes = Math.max(1, ...rows.map((row) => usageMinutes(row)))
+  const heatColor = (minutes: number, future: boolean, today: boolean, selected: boolean) => {
+    if (future) return '#111'
+    if (minutes <= 0) return selected ? '#1f2a28' : '#171717'
+    const ratio = minutes / maxUsageMinutes
+    if (today) return C.mint
+    if (ratio >= 0.75) return '#00e8c5'
+    if (ratio >= 0.5) return '#00bfa5'
+    if (ratio >= 0.25) return '#087d70'
+    return '#15524d'
+  }
   if (error) return <ErrorBlock message={error} />
 
   return (
@@ -369,31 +382,33 @@ function TimelinePage({ currentDay }: { currentDay: number }) {
           <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 16 }}>전체 날짜</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: 6 }}>
             {Array.from({ length: 100 }, (_, i) => i + 1).map((n) => {
-              const done = n < completedDays
+              const row = rowByDay.get(n)
+              const minutes = usageMinutes(row)
               const today = n === completedDays
               const future = n > completedDays
+              const selected = sel === n
               return (
                 <button key={n} onClick={() => !future && setSel(n)} style={{
                   aspectRatio: '1', borderRadius: 6, border: 'none',
                   cursor: future ? 'default' : 'pointer',
-                  background: today ? C.mint : sel === n && !today ? C.chip : done ? '#1e1e1e' : '#111',
-                  color: today ? C.ink : done ? C.muted : '#2e2e2e',
+                  background: heatColor(minutes, future, today, selected),
+                  color: today ? C.ink : minutes > 0 ? C.soft : '#3a3a3a',
                   fontSize: 10, fontFamily: "'JetBrains Mono', monospace",
                   fontWeight: today ? 700 : 400,
                   opacity: future ? 0.3 : 1,
-                  outline: sel === n && !today ? `1px solid ${C.mint}` : 'none',
+                  outline: selected && !today ? `1px solid ${C.mint}` : 'none',
                   outlineOffset: 1,
                   transition: 'all 100ms', padding: 0,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
+                }} title={`${n}일차 · ${fmtMinutes(minutes)}`}>
                   {n}
                 </button>
               )
             })}
           </div>
           {/* legend */}
-          <div style={{ display: 'flex', gap: 16, marginTop: 16 }}>
-            {[{ col: C.mint, lbl: '오늘' }, { col: '#1e1e1e', lbl: '완료' }, { col: '#111', lbl: '예정' }].map(l => (
+          <div style={{ display: 'flex', gap: 14, marginTop: 16, flexWrap: 'wrap' }}>
+            {[{ col: '#171717', lbl: '기록 없음' }, { col: '#15524d', lbl: '적음' }, { col: '#087d70', lbl: '보통' }, { col: '#00bfa5', lbl: '많음' }, { col: C.mint, lbl: '최대/오늘' }].map(l => (
               <div key={l.lbl} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <div style={{ width: 8, height: 8, borderRadius: 2, background: l.col }} />
                 <span style={{ fontSize: 10, color: C.alt }}>{l.lbl}</span>
@@ -407,7 +422,7 @@ function TimelinePage({ currentDay }: { currentDay: number }) {
           <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 4 }}>선택한 날짜</div>
           <div style={{ fontSize: 34, fontWeight: 900, color: C.white, letterSpacing: '-0.03em', marginBottom: 18 }}>{sel}일차</div>
 
-          {d ? [['PC', fmtMinutes(d.pc_minutes)], ['휴대폰', fmtMinutes(d.phone_minutes)], ['공부', fmtMinutes(d.focus_minutes)], ['걸음', d.steps.toLocaleString()]].map(([k, v]) => (
+          {d ? [['총 사용 시간', fmtMinutes(usageMinutes(d))], ['PC', fmtMinutes(d.pc_minutes)], ['휴대폰', fmtMinutes(d.phone_minutes)], ['공부', fmtMinutes(d.focus_minutes)], ['걸음', d.steps.toLocaleString()]].map(([k, v]) => (
             <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 0', borderBottom: `1px solid ${C.border}` }}>
               <span style={{ fontSize: 12, color: C.muted, fontWeight: 600 }}>{k}</span>
               <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: C.muted }}>{v}</span>
