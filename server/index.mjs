@@ -55,7 +55,7 @@ function getUserChallenge(userId) {
   let challenge = db.prepare('SELECT * FROM challenges WHERE user_id = ?').get(userId)
   if (challenge) return challenge
   const result = db.prepare('INSERT INTO challenges (user_id, name, start_date, target_days) VALUES (?, ?, ?, 100)')
-    .run(userId, '나의 백일', process.env.CHALLENGE_START_DATE || todayKst())
+    .run(userId, '하루핏', process.env.CHALLENGE_START_DATE || todayKst())
   return db.prepare('SELECT * FROM challenges WHERE id = ?').get(Number(result.lastInsertRowid))
 }
 function currentDay(challenge) {
@@ -408,7 +408,7 @@ const server = http.createServer(async (req, res) => {
 })
 
 server.listen(PORT, () => {
-  console.log(`나의 백일 API 실행 중: http://localhost:${PORT}`)
+  console.log(`하루핏 API 실행 중: http://localhost:${PORT}`)
   console.log(`SQLite DB: ${dbPath}`)
 })
 

@@ -173,7 +173,7 @@ if (!focusColumns.includes('note')) db.exec("ALTER TABLE focus_sessions ADD COLU
 
 if (db.prepare('SELECT COUNT(*) AS count FROM challenges').get().count === 0) {
   db.prepare('INSERT INTO challenges (id, user_id, name, start_date, target_days) VALUES (1, NULL, ?, ?, 100)')
-    .run('나의 백일', process.env.CHALLENGE_START_DATE || todayKst())
+    .run('하루핏', process.env.CHALLENGE_START_DATE || todayKst())
 }
 
 export function isSeeded() {
