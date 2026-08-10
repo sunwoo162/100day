@@ -14,6 +14,7 @@ export type DashboardData = {
   metrics: Record<'pc' | 'phone' | 'focus' | 'sleep' | 'steps' | 'exercise' | 'development' | 'github', DashboardMetric>
   apps: { name: string; source: string; minutes: number }[]
   events: { time: string; label: string; type: string }[]
+  recent: TimelineEntry[]
 }
 
 export type ChallengeData = {
@@ -95,6 +96,7 @@ export type ResultData = {
   }
   first: TimelineEntry
   last: TimelineEntry
+  rows: TimelineEntry[]
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {

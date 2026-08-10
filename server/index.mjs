@@ -92,6 +92,7 @@ const server = http.createServer(async (req, res) => {
       const prev = getMetric(Math.max(1, day - 1))
       const apps = db.prepare('SELECT app_name AS name, source, minutes FROM app_usage WHERE day_number = ? ORDER BY minutes DESC LIMIT 8').all(day)
       const events = db.prepare('SELECT time, label, type FROM timeline_events WHERE day_number = ? ORDER BY time').all(day)
+      const recent = db.prepare('SELECT * FROM daily_metrics WHERE day_number <= ? ORDER BY day_number DESC LIMIT 7').all(day).reverse()
       return json(res, 200, {
         day,
         date: metric.date,
@@ -104,7 +105,7 @@ const server = http.createServer(async (req, res) => {
           exercise: { minutes: metric.exercise_minutes, delta: metric.exercise_minutes - prev.exercise_minutes },
           development: { minutes: metric.development_minutes, display: formatMinutes(metric.development_minutes), delta: metric.development_minutes - prev.development_minutes },
           github: { commits: metric.github_commits, delta: metric.github_commits - prev.github_commits }
-        }, apps, events
+        }, apps, events, recent
       })
     }
 
@@ -185,7 +186,8 @@ const server = http.createServer(async (req, res) => {
         COALESCE(SUM(development_minutes), 0) development_minutes, COALESCE(SUM(github_commits), 0) github_commits
         FROM daily_metrics`).get()
       const first = getMetric(1), last = getMetric(currentDay())
-      return json(res, 200, { totals, first, last })
+      const rows = db.prepare('SELECT * FROM daily_metrics ORDER BY day_number').all()
+      return json(res, 200, { totals, first, last, rows })
     }
 
     return json(res, 404, { error: '찾을 수 없습니다' })

@@ -184,28 +184,31 @@ function DashboardPage({ setPage, currentDay }: { setPage: (p: Page) => void; cu
     api.dashboard(currentDay).then(setData).catch((err) => setError(err.message))
   }, [currentDay])
 
-  const spark7 = [4.1, 5.2, 6.3, 5.8, 7.1, 6.4, 6.2]
-  const spark7b = [5.3, 4.8, 5.6, 6.1, 4.9, 5.0, 4.1]
-  const spark7c = [1.8, 2.4, 2.1, 3.2, 2.9, 3.1, 3.3]
-  const spark7d = [7.5, 6.8, 7.2, 5.9, 7.1, 6.5, 6.7]
-  const spark7e = [6200, 7400, 5800, 8100, 7900, 6700, 8421]
-  const spark7f = [20, 35, 0, 42, 27, 60, 27]
-  const spark7g = [1.2, 1.8, 2.1, 2.4, 2.0, 2.3, 2.5]
-  const spark7h = [2, 4, 5, 6, 3, 8, 7]
-
   if (error) return <ErrorBlock message={error} />
   if (!data) return <LoadingBlock />
 
   const m = data.metrics
+  const recent = data.recent ?? []
+  const hasRecent = recent.length > 0
+  const spark = {
+    pc: recent.map((row) => row.pc_minutes / 60),
+    phone: recent.map((row) => row.phone_minutes / 60),
+    focus: recent.map((row) => row.focus_minutes / 60),
+    sleep: recent.map((row) => row.sleep_minutes / 60),
+    steps: recent.map((row) => row.steps),
+    exercise: recent.map((row) => row.exercise_minutes),
+    development: recent.map((row) => row.development_minutes / 60),
+    github: recent.map((row) => row.github_commits),
+  }
   const stats = [
-    { id: 'pc', label: 'PC', value: parseHourValue(m.pc.display || '0h 00m'), sub: fmtDelta(m.pc.delta), up: m.pc.delta >= 0, spark: spark7, max: 10, color: C.mint },
-    { id: 'phone', label: '휴대폰', value: parseHourValue(m.phone.display || '0h 00m'), sub: fmtDelta(m.phone.delta), up: m.phone.delta <= 0, spark: spark7b, max: 10, color: C.faint },
-    { id: 'focus', label: '집중', value: parseHourValue(m.focus.display || '0h 00m'), sub: fmtDelta(m.focus.delta), up: m.focus.delta >= 0, spark: spark7c, max: 5, color: C.mint },
-    { id: 'sleep', label: '수면', value: parseHourValue(m.sleep.display || '0h 00m'), sub: fmtDelta(m.sleep.delta), up: m.sleep.delta >= 0, spark: spark7d, max: 9, color: C.mintMuted },
-    { id: 'steps', label: '걸음', value: (m.steps.value || 0).toLocaleString(), sub: fmtDelta(m.steps.delta, ''), up: m.steps.delta >= 0, spark: spark7e, max: 12000, color: C.mint },
-    { id: 'ex', label: '운동', value: fmtMinutes(m.exercise.minutes || 0), sub: fmtDelta(m.exercise.delta), up: m.exercise.delta >= 0, spark: spark7f, max: 90, color: C.mintMuted },
-    { id: 'dev', label: '개발', value: parseHourValue(m.development.display || '0h 00m'), sub: fmtDelta(m.development.delta), up: m.development.delta >= 0, spark: spark7g, max: 5, color: C.mintBright },
-    { id: 'git', label: 'GitHub', value: `커밋 ${m.github.commits || 0}개`, sub: fmtDelta(m.github.delta, ''), up: m.github.delta >= 0, spark: spark7h, max: 12, color: C.mint },
+    { id: 'pc', label: 'PC', value: parseHourValue(m.pc.display || '0h 00m'), sub: fmtDelta(m.pc.delta), up: m.pc.delta >= 0, spark: spark.pc, max: 10, color: C.mint },
+    { id: 'phone', label: '휴대폰', value: parseHourValue(m.phone.display || '0h 00m'), sub: fmtDelta(m.phone.delta), up: m.phone.delta <= 0, spark: spark.phone, max: 10, color: C.faint },
+    { id: 'focus', label: '공부', value: parseHourValue(m.focus.display || '0h 00m'), sub: fmtDelta(m.focus.delta), up: m.focus.delta >= 0, spark: spark.focus, max: 5, color: C.mint },
+    { id: 'sleep', label: '수면', value: parseHourValue(m.sleep.display || '0h 00m'), sub: fmtDelta(m.sleep.delta), up: m.sleep.delta >= 0, spark: spark.sleep, max: 9, color: C.mintMuted },
+    { id: 'steps', label: '걸음', value: (m.steps.value || 0).toLocaleString(), sub: fmtDelta(m.steps.delta, ''), up: m.steps.delta >= 0, spark: spark.steps, max: 12000, color: C.mint },
+    { id: 'ex', label: '운동', value: fmtMinutes(m.exercise.minutes || 0), sub: fmtDelta(m.exercise.delta), up: m.exercise.delta >= 0, spark: spark.exercise, max: 90, color: C.mintMuted },
+    { id: 'dev', label: '개발', value: parseHourValue(m.development.display || '0h 00m'), sub: fmtDelta(m.development.delta), up: m.development.delta >= 0, spark: spark.development, max: 5, color: C.mintBright },
+    { id: 'git', label: 'GitHub', value: `커밋 ${m.github.commits || 0}개`, sub: fmtDelta(m.github.delta, ''), up: m.github.delta >= 0, spark: spark.github, max: 12, color: C.mint },
   ]
 
   const maxAppMinutes = Math.max(1, ...data.apps.map((app) => app.minutes))
@@ -226,9 +229,11 @@ function DashboardPage({ setPage, currentDay }: { setPage: (p: Page) => void; cu
     dot: event.type === 'development' ? C.mint : event.type === 'focus' ? C.mintBright : event.type === 'health' ? C.mintMuted : '#3a3a3a',
   }))
 
-  /* device ring data: laptop=6h21, phone=4h13, watch=active all day */
-  const deviceTotal = 6.35 + 4.22 + 8.67
-  const devPcts = [6.35 / deviceTotal, 4.22 / deviceTotal, 8.67 / deviceTotal]
+  const pcMinutes = m.pc.minutes ?? 0
+  const phoneMinutes = m.phone.minutes ?? 0
+  const sleepMinutes = m.sleep.minutes ?? 0
+  const deviceTotal = pcMinutes + phoneMinutes + sleepMinutes
+  const devPcts = deviceTotal > 0 ? [pcMinutes / deviceTotal, phoneMinutes / deviceTotal, sleepMinutes / deviceTotal] : [0, 0, 0]
 
   return (
     <div style={{ padding: '32px 36px', maxWidth: 1080 }}>
@@ -260,7 +265,7 @@ function DashboardPage({ setPage, currentDay }: { setPage: (p: Page) => void; cu
             <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 10 }}>{s.label.toUpperCase()}</div>
             <div style={{ fontSize: 22, fontWeight: 800, color: C.white, letterSpacing: '-0.02em', marginBottom: 4, lineHeight: 1 }}>{s.value}</div>
             <div style={{ fontSize: 10, color: s.up ? C.mintMuted : C.faint, marginBottom: 12 }}>{s.sub}</div>
-            <Sparkline data={s.spark} color={s.color} max={s.max} />
+            {hasRecent ? <Sparkline data={s.spark} color={s.color} max={s.max} /> : <EmptyChart height={28} />}
           </div>
         ))}
       </div>
@@ -481,7 +486,8 @@ function AnalyticsPage() {
   if (error) return <ErrorBlock message={error} />
   if (!data) return <LoadingBlock />
 
-  const rows = data.rows.length ? data.rows : [{ pc_minutes: 0, phone_minutes: 0, sleep_minutes: 0, focus_minutes: 0, steps: 0, github_commits: 0 } as TimelineEntry]
+  const rows = data.rows
+  const hasRows = rows.length > 0
   const screenPc = rows.map((row) => row.pc_minutes / 60)
   const screenPhone = rows.map((row) => row.phone_minutes / 60)
   const sleepData = rows.map((row) => row.sleep_minutes / 60)
@@ -490,12 +496,7 @@ function AnalyticsPage() {
   const ghData = rows.map((row) => row.github_commits)
   const avg = (arr: number[]) => arr.length ? arr.reduce((a, v) => a + v, 0) / arr.length : 0
 
-  const insights = [
-    { icon: '↑', text: '7시간 이상 자면 집중도가 24% 더 좋아집니다.' },
-    { icon: '★', text: '가장 생산적인 요일은 화요일입니다.' },
-    { icon: '↓', text: '37일 동안 평균 휴대폰 사용량이 18% 줄었습니다.' },
-    { icon: '↑', text: '처음 10일 대비 VS Code 사용량이 31% 늘었습니다.' },
-  ]
+  const insights = buildInsights(rows)
 
   const maxAppMinutes = Math.max(1, ...data.topApps.map((app) => app.minutes))
   const apps = data.topApps.map((app, i) => ({
@@ -532,7 +533,7 @@ function AnalyticsPage() {
             <Legend color={C.mint} label="PC" />
             <Legend color="#3a3a3a" label="휴대폰" />
           </div>
-          <DualLineChart a={screenPc} b={screenPhone} maxVal={10} colorA={C.mint} colorB="#4a4a4a" h={90} />
+          {hasRows ? <DualLineChart a={screenPc} b={screenPhone} maxVal={10} colorA={C.mint} colorB="#4a4a4a" h={90} /> : <EmptyChart height={90} />}
         </ChartCard>
 
         {/* Sleep */}
@@ -541,16 +542,16 @@ function AnalyticsPage() {
             <span style={{ fontSize: 26, fontWeight: 800, color: C.white }}>{avg(sleepData).toFixed(1)}시간</span>
             <span style={{ fontSize: 10, color: C.mintMuted }}>평균</span>
           </div>
-          <AreaChart data={sleepData} maxVal={9} color={C.mintMuted} h={90} />
+          {hasRows ? <AreaChart data={sleepData} maxVal={9} color={C.mintMuted} h={90} /> : <EmptyChart height={90} />}
         </ChartCard>
 
         {/* Focus */}
-        <ChartCard title="집중 시간" subtitle="시간 / 일">
+        <ChartCard title="공부 시간" subtitle="시간 / 일">
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12 }}>
             <span style={{ fontSize: 26, fontWeight: 800, color: C.white }}>{avg(focusData).toFixed(1)}시간</span>
             <span style={{ fontSize: 10, color: C.mint }}>평균</span>
           </div>
-          <BarChartSVG data={focusData} maxVal={5} color={C.mint} h={90} />
+          {hasRows ? <BarChartSVG data={focusData} maxVal={5} color={C.mint} h={90} /> : <EmptyChart height={90} />}
         </ChartCard>
 
         {/* Steps */}
@@ -559,20 +560,20 @@ function AnalyticsPage() {
             <span style={{ fontSize: 26, fontWeight: 800, color: C.white }}>{(avg(stepsData) / 1000).toFixed(1)}천</span>
             <span style={{ fontSize: 10, color: C.mint }}>평균</span>
           </div>
-          <BarChartSVG data={stepsData.map(v => v / 1000)} maxVal={10} color="#2a2a2a" accent={C.mint} h={90} />
+          {hasRows ? <BarChartSVG data={stepsData.map(v => v / 1000)} maxVal={10} color="#2a2a2a" accent={C.mint} h={90} /> : <EmptyChart height={90} />}
         </ChartCard>
       </div>
 
       {/* GitHub heatmap */}
       <div style={{ background: C.raised, borderRadius: 14, padding: '20px 24px', border: `1px solid ${C.border}`, marginBottom: 16 }}>
         <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 14 }}>GITHUB 활동 · {data.days}일</div>
-        <GithubHeatmap data={ghData} />
+        {hasRows ? <GithubHeatmap data={ghData} /> : <EmptyChart height={54} label="GitHub 기록이 아직 없습니다." />}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
         {/* App usage */}
         <ChartCard title="상위 앱" subtitle="누적 시간">
-          {apps.map(a => (
+          {apps.length ? apps.map(a => (
             <div key={a.name} style={{ marginBottom: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -585,18 +586,18 @@ function AnalyticsPage() {
                 <div style={{ width: `${a.pct}%`, height: '100%', background: a.color, borderRadius: 2 }} />
               </div>
             </div>
-          ))}
+          )) : <EmptyChart height={84} label="앱 사용 기록이 아직 없습니다." />}
         </ChartCard>
 
         {/* Insights */}
         <ChartCard title="인사이트" subtitle="감지된 패턴">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {insights.map((ins, i) => (
+            {insights.length ? insights.map((ins, i) => (
               <div key={i} style={{ display: 'flex', gap: 10, padding: '10px 12px', background: C.surface, borderRadius: 10, border: `1px solid ${C.border}` }}>
                 <span style={{ fontSize: 12, color: C.mint, fontWeight: 700, minWidth: 14 }}>{ins.icon}</span>
                 <p style={{ margin: 0, fontSize: 11, color: C.muted, lineHeight: 1.6 }}>{ins.text}</p>
               </div>
-            ))}
+            )) : <EmptyChart height={84} label="기록이 쌓이면 패턴을 보여줍니다." />}
           </div>
         </ChartCard>
       </div>
@@ -623,6 +624,28 @@ function Legend({ color, label }: { color: string; label: string }) {
   )
 }
 
+function EmptyChart({ height, label = '아직 기록된 데이터가 없습니다.' }: { height: number; label?: string }) {
+  return (
+    <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px dashed ${C.border2}`, borderRadius: 8, color: C.alt, fontSize: 11 }}>
+      {label}
+    </div>
+  )
+}
+
+function buildInsights(rows: TimelineEntry[]) {
+  if (rows.length < 2) return []
+  const first = rows[0]
+  const last = rows[rows.length - 1]
+  const insights: { icon: string; text: string }[] = []
+  const phoneDiff = last.phone_minutes - first.phone_minutes
+  const studyDiff = last.focus_minutes - first.focus_minutes
+  const commitTotal = rows.reduce((sum, row) => sum + row.github_commits, 0)
+  if (phoneDiff !== 0) insights.push({ icon: phoneDiff < 0 ? '↓' : '↑', text: `기간 첫 기록 대비 휴대폰 사용이 ${fmtMinutes(Math.abs(phoneDiff))} ${phoneDiff < 0 ? '줄었습니다.' : '늘었습니다.'}` })
+  if (studyDiff !== 0) insights.push({ icon: studyDiff > 0 ? '↑' : '↓', text: `기간 첫 기록 대비 공부 시간이 ${fmtMinutes(Math.abs(studyDiff))} ${studyDiff > 0 ? '늘었습니다.' : '줄었습니다.'}` })
+  if (commitTotal > 0) insights.push({ icon: '•', text: `선택 기간에 GitHub 커밋 ${commitTotal}개가 기록됐습니다.` })
+  return insights
+}
+
 function GithubHeatmap({ data }: { data: number[] }) {
   const max = Math.max(1, ...data)
   const opacity = (v: number) => v === 0 ? 0.06 : 0.15 + (v / max) * 0.85
@@ -634,10 +657,6 @@ function GithubHeatmap({ data }: { data: number[] }) {
           background: C.mint, opacity: opacity(v),
           cursor: 'default',
         }} />
-      ))}
-      {/* future cells */}
-      {Array.from({ length: 63 }, (_, i) => (
-        <div key={`f${i}`} style={{ width: 14, height: 14, borderRadius: 3, background: C.border, opacity: 0.5 }} />
       ))}
     </div>
   )
@@ -1039,18 +1058,17 @@ function ResultPage() {
     api.result().then(setData).catch((err) => setError(err.message))
   }, [])
 
-  /* spark summary bars for result */
-  const summaryData = [3,4,4,5,5,4,6,5,6,7,6,7,8,7,8,8,9,8,9,9,9,10,9,10,10,10,9,10,10,10,10,10,9,10,10,10,10]
-
   if (error) return <ErrorBlock message={error} />
   if (!data) return <LoadingBlock />
 
+  const summaryData = data.rows.map((row) => row.focus_minutes / 60)
+  const hasRows = data.rows.length > 0
   const totalHours = Math.round((data.totals.pc_minutes + data.totals.phone_minutes + data.totals.focus_minutes + data.totals.sleep_minutes + data.totals.exercise_minutes) / 60)
   const bigStats = [
     { label: '수면', val: `${Math.round(data.totals.sleep_minutes / 60)}시간`, color: C.mintMuted },
     { label: 'PC', val: `${Math.round(data.totals.pc_minutes / 60)}시간`, color: C.mint },
     { label: '휴대폰', val: `${Math.round(data.totals.phone_minutes / 60)}시간`, color: C.faint },
-    { label: '집중', val: `${Math.round(data.totals.focus_minutes / 60)}시간`, color: C.mintBright },
+    { label: '공부', val: `${Math.round(data.totals.focus_minutes / 60)}시간`, color: C.mintBright },
     { label: '개발', val: `${Math.round(data.totals.development_minutes / 60)}시간`, color: C.mint },
     { label: '운동', val: `${Math.round(data.totals.exercise_minutes / 60)}시간`, color: C.mintMuted },
   ]
@@ -1065,7 +1083,7 @@ function ResultPage() {
   const sleep = pct(data.first.sleep_minutes, data.last.sleep_minutes)
   const compare = [
     { label: '휴대폰 사용량', d1: fmtMinutes(data.first.phone_minutes), d100: fmtMinutes(data.last.phone_minutes), ...phone },
-    { label: '집중 시간', d1: fmtMinutes(data.first.focus_minutes), d100: fmtMinutes(data.last.focus_minutes), ...focus },
+    { label: '공부 시간', d1: fmtMinutes(data.first.focus_minutes), d100: fmtMinutes(data.last.focus_minutes), ...focus },
     { label: '개발 시간', d1: fmtMinutes(data.first.development_minutes), d100: fmtMinutes(data.last.development_minutes), ...dev },
     { label: '수면', d1: fmtMinutes(data.first.sleep_minutes), d100: fmtMinutes(data.last.sleep_minutes), ...sleep },
   ]
@@ -1084,9 +1102,9 @@ function ResultPage() {
 
         {/* mini trend */}
         <div style={{ maxWidth: 500, margin: '28px auto 0', opacity: 0.6 }}>
-          <AreaChart data={summaryData} maxVal={10} color={C.mint} h={40} />
+          {hasRows ? <AreaChart data={summaryData} maxVal={10} color={C.mint} h={40} /> : <EmptyChart height={40} />}
         </div>
-        <div style={{ fontSize: 10, color: '#333', fontFamily: "'JetBrains Mono', monospace", marginTop: 4 }}>집중 점수 — 1일차 → 100일차</div>
+        <div style={{ fontSize: 10, color: '#333', fontFamily: "'JetBrains Mono', monospace", marginTop: 4 }}>공부 시간 — 실제 기록 기반</div>
       </div>
 
       {/* Stats */}
@@ -1139,6 +1157,7 @@ function ResultPage() {
    SVG CHARTS
 ═══════════════════════════════════════════════ */
 function Sparkline({ data, color, max }: { data: number[]; color: string; max: number }) {
+  if (!data.length) return <EmptyChart height={28} />
   const W = 120, H = 28
   const denom = Math.max(1, data.length - 1)
   const pts = data.map((v, i) => `${(i / denom) * W},${H - (v / max) * H}`).join(' ')
@@ -1155,6 +1174,7 @@ function Sparkline({ data, color, max }: { data: number[]; color: string; max: n
 }
 
 function AreaChart({ data, maxVal, color, h }: { data: number[]; maxVal: number; color: string; h: number }) {
+  if (!data.length) return <EmptyChart height={h} />
   const W = 300
   const denom = Math.max(1, data.length - 1)
   const pts = data.map((v, i) => `${(i / denom) * W},${h - (v / maxVal) * h}`)
@@ -1176,6 +1196,7 @@ function AreaChart({ data, maxVal, color, h }: { data: number[]; maxVal: number;
 }
 
 function DualLineChart({ a, b, maxVal, colorA, colorB, h }: { a: number[]; b: number[]; maxVal: number; colorA: string; colorB: string; h: number }) {
+  if (!a.length && !b.length) return <EmptyChart height={h} />
   const W = 300
   const pts = (arr: number[]) => {
     const denom = Math.max(1, arr.length - 1)
@@ -1190,6 +1211,7 @@ function DualLineChart({ a, b, maxVal, colorA, colorB, h }: { a: number[]; b: nu
 }
 
 function BarChartSVG({ data, maxVal, color, accent, h }: { data: number[]; maxVal: number; color: string; accent?: string; h: number }) {
+  if (!data.length) return <EmptyChart height={h} />
   const W = 300
   const gap = 3
   const bw = (W - gap * (data.length - 1)) / data.length
