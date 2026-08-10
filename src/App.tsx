@@ -76,23 +76,22 @@ function LoginPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: C.canvas, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Pretendard', system-ui, sans-serif", padding: 24 }}>
-      <div style={{ width: '100%', maxWidth: 420, background: C.raised, border: `1px solid ${C.border}`, borderRadius: 16, padding: 32 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 28 }}>
+      <div style={{ width: '100%', maxWidth: 420, background: C.raised, border: `1px solid ${C.border}`, borderRadius: 16, padding: 34, boxShadow: '0 24px 80px rgba(0,0,0,0.28)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 30 }}>
           <LogoMark />
           <div>
-            <div style={{ fontSize: 14, fontWeight: 900, color: C.white, letterSpacing: '0.08em' }}>100 DAYS</div>
-            <div style={{ fontSize: 11, color: C.alt, marginTop: 2 }}>사용자별 기록을 저장하려면 로그인하세요</div>
+            <div style={{ fontSize: 15, fontWeight: 900, color: C.white, letterSpacing: '0.08em' }}>100 DAYS</div>
+            <div style={{ fontSize: 12, color: C.alt, marginTop: 3 }}>내 기록을 안전하게 저장하세요</div>
           </div>
         </div>
-        <button onClick={() => login('github')} style={{ width: '100%', padding: '13px 16px', borderRadius: 10, border: `1px solid ${C.border2}`, background: C.surface, color: C.white, cursor: 'pointer', fontSize: 13, fontWeight: 700, marginBottom: 10 }}>
-          GitHub로 로그인
+        <button onClick={() => login('github')} style={{ width: '100%', padding: '13px 16px', borderRadius: 10, border: '1px solid #30363d', background: '#24292f', color: C.white, cursor: 'pointer', fontSize: 13, fontWeight: 800, marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+          <IcoGitHubBrand />
+          <span>GitHub로 계속하기</span>
         </button>
-        <button onClick={() => login('google')} style={{ width: '100%', padding: '13px 16px', borderRadius: 10, border: 'none', background: C.mint, color: C.ink, cursor: 'pointer', fontSize: 13, fontWeight: 800 }}>
-          Google로 로그인
+        <button onClick={() => login('google')} style={{ width: '100%', padding: '13px 16px', borderRadius: 10, border: '1px solid #dadce0', background: '#ffffff', color: '#202124', cursor: 'pointer', fontSize: 13, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+          <IcoGoogleBrand />
+          <span>Google로 계속하기</span>
         </button>
-        <div style={{ fontSize: 11, color: C.alt, lineHeight: 1.7, marginTop: 18 }}>
-          로컬 개발 콜백 URL은 GitHub/Google OAuth 앱에 등록한 주소와 같아야 합니다.
-        </div>
       </div>
     </div>
   )
@@ -1354,6 +1353,25 @@ function LogoMark() {
       <rect x="13" y="14" width="3" height="12" rx="1" fill={C.ink} />
       <rect x="18" y="9" width="3" height="17" rx="1" fill={C.ink} />
       <rect x="23" y="6" width="3" height="20" rx="1" fill={C.ink} />
+    </svg>
+  )
+}
+
+function IcoGitHubBrand() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 .5A11.5 11.5 0 0 0 8.36 22.9c.58.11.79-.25.79-.56v-2.18c-3.22.7-3.9-1.38-3.9-1.38-.53-1.35-1.29-1.71-1.29-1.71-1.06-.72.08-.71.08-.71 1.17.08 1.78 1.2 1.78 1.2 1.04 1.78 2.73 1.27 3.4.97.1-.75.41-1.27.74-1.56-2.57-.29-5.27-1.28-5.27-5.72 0-1.26.45-2.3 1.19-3.11-.12-.29-.52-1.47.11-3.06 0 0 .97-.31 3.17 1.19A10.9 10.9 0 0 1 12 5.88c.98 0 1.96.13 2.88.39 2.2-1.5 3.17-1.19 3.17-1.19.63 1.59.23 2.77.11 3.06.74.81 1.19 1.85 1.19 3.11 0 4.45-2.7 5.42-5.28 5.71.42.36.79 1.07.79 2.16v3.22c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z" />
+    </svg>
+  )
+}
+
+function IcoGoogleBrand() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+      <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.91c1.7-1.57 2.69-3.88 2.69-6.62Z" />
+      <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.91-2.26c-.8.54-1.83.86-3.05.86-2.35 0-4.34-1.58-5.05-3.71H.94v2.33A9 9 0 0 0 9 18Z" />
+      <path fill="#FBBC05" d="M3.95 10.71A5.41 5.41 0 0 1 3.67 9c0-.59.1-1.16.28-1.71V4.96H.94A9 9 0 0 0 0 9c0 1.45.35 2.82.94 4.04l3.01-2.33Z" />
+      <path fill="#EA4335" d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .94 4.96l3.01 2.33C4.66 5.16 6.65 3.58 9 3.58Z" />
     </svg>
   )
 }
