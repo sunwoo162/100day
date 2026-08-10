@@ -80,8 +80,7 @@ function LoginPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 30 }}>
           <LogoMark />
           <div>
-            <div style={{ fontSize: 15, fontWeight: 900, color: C.white, letterSpacing: '0.08em' }}>나의 백일</div>
-            <div style={{ fontSize: 12, color: C.alt, marginTop: 3 }}>내 기록을 안전하게 저장하세요</div>
+            <div style={{ fontSize: 26, fontWeight: 900, color: C.white, letterSpacing: '-0.02em', lineHeight: 1 }}>나의 백일</div>
           </div>
         </div>
         <button onClick={() => login('github')} style={{ width: '100%', padding: '13px 16px', borderRadius: 10, border: '1px solid #30363d', background: '#24292f', color: C.white, cursor: 'pointer', fontSize: 13, fontWeight: 800, marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
