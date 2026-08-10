@@ -349,6 +349,10 @@ function TimelinePage({ currentDay }: { currentDay: number }) {
     api.timeline().then(setRows).catch((err) => setError(err.message))
   }, [])
 
+  useEffect(() => {
+    setSel(currentDay)
+  }, [currentDay])
+
   const completedDays = currentDay
   const d = rows.find((row) => row.day_number === sel) ?? rows[0]
   if (error) return <ErrorBlock message={error} />
@@ -363,7 +367,7 @@ function TimelinePage({ currentDay }: { currentDay: number }) {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 20 }}>
+      <div className="timeline-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 20 }}>
         {/* Grid */}
         <div style={{ background: C.raised, borderRadius: 14, padding: '24px', border: `1px solid ${C.border}` }}>
           <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 16 }}>전체 날짜</div>
@@ -415,15 +419,15 @@ function TimelinePage({ currentDay }: { currentDay: number }) {
           )) : <div style={{ fontSize: 12, color: C.alt, padding: '12px 0' }}>아직 저장된 기록이 없습니다.</div>}
 
           <div style={{ marginTop: 16, marginBottom: 12 }}>
-            <DotScore label="Focus" value={d.focusScore} color={C.mint} />
-            <DotScore label="Satisfaction" value={d.sat} color={C.mintMuted} />
+            <DotScore label="공부 집중도" value={d?.focus_score ?? 0} color={C.mint} />
+            <DotScore label="만족도" value={d?.satisfaction_score ?? 0} color={C.mintMuted} />
           </div>
 
           {/* GitHub mini heatrow */}
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 6 }}>커밋</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <CommitPips count={d.commits} />
+              <CommitPips count={d?.github_commits ?? 0} />
               <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: C.mint }}>{d?.github_commits ?? 0}</span>
             </div>
           </div>

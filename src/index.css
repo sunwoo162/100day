@@ -70,4 +70,7 @@ body {
   .mobile-header {
     display: flex !important;
   }
+  .timeline-layout {
+    grid-template-columns: 1fr !important;
+  }
 }
