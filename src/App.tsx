@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { api, type AnalyticsData, type ChallengeData, type DashboardData, type DeviceData, type FocusSession, type ResultData, type StudyCategory, type TimelineEntry } from './lib/api'
+import { api, type AnalyticsData, type AuthUser, type ChallengeData, type DashboardData, type DeviceData, type DevicePairingData, type FocusSession, type ResultData, type StudyCategory, type TimelineEntry } from './lib/api'
 
 type Page = 'dashboard' | 'timeline' | 'analytics' | 'focus' | 'devices' | 'result'
 
@@ -69,19 +69,68 @@ function ErrorBlock({ message }: { message: string }) {
   return <div style={{ padding: 36, color: C.mintMuted, fontSize: 13 }}>{message}</div>
 }
 
+function LoginPage() {
+  const login = (provider: 'github' | 'google') => {
+    window.location.href = `/api/auth/${provider}`
+  }
+
+  return (
+    <div style={{ minHeight: '100vh', background: C.canvas, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Pretendard', system-ui, sans-serif", padding: 24 }}>
+      <div style={{ width: '100%', maxWidth: 420, background: C.raised, border: `1px solid ${C.border}`, borderRadius: 16, padding: 32 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 28 }}>
+          <LogoMark />
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 900, color: C.white, letterSpacing: '0.08em' }}>100 DAYS</div>
+            <div style={{ fontSize: 11, color: C.alt, marginTop: 2 }}>사용자별 기록을 저장하려면 로그인하세요</div>
+          </div>
+        </div>
+        <button onClick={() => login('github')} style={{ width: '100%', padding: '13px 16px', borderRadius: 10, border: `1px solid ${C.border2}`, background: C.surface, color: C.white, cursor: 'pointer', fontSize: 13, fontWeight: 700, marginBottom: 10 }}>
+          GitHub로 로그인
+        </button>
+        <button onClick={() => login('google')} style={{ width: '100%', padding: '13px 16px', borderRadius: 10, border: 'none', background: C.mint, color: C.ink, cursor: 'pointer', fontSize: 13, fontWeight: 800 }}>
+          Google로 로그인
+        </button>
+        <div style={{ fontSize: 11, color: C.alt, lineHeight: 1.7, marginTop: 18 }}>
+          로컬 개발 콜백 URL은 GitHub/Google OAuth 앱에 등록한 주소와 같아야 합니다.
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
   const [page, setPage] = useState<Page>('dashboard')
   const [menuOpen, setMenuOpen] = useState(false)
   const [challenge, setChallenge] = useState<ChallengeData | null>(null)
+  const [user, setUser] = useState<AuthUser | null>(null)
+  const [authLoading, setAuthLoading] = useState(true)
 
   useEffect(() => {
-    api.challenge().then(setChallenge).catch(() => setChallenge(null))
+    api.me()
+      .then(({ user }) => setUser(user))
+      .catch(() => setUser(null))
+      .finally(() => setAuthLoading(false))
   }, [])
+
+  useEffect(() => {
+    if (!user) return
+    api.challenge().then(setChallenge).catch(() => setChallenge(null))
+  }, [user])
+
+  const logout = async () => {
+    await api.logout().catch(() => {})
+    setUser(null)
+    setChallenge(null)
+    setPage('dashboard')
+  }
+
+  if (authLoading) return <LoadingBlock label="로그인 상태를 확인하는 중입니다" />
+  if (!user) return <LoginPage />
 
   const currentDay = challenge?.currentDay ?? 1
   return (
     <div style={{ display: 'flex', height: '100vh', background: C.canvas, overflow: 'hidden', fontFamily: "'Pretendard', system-ui, sans-serif" }}>
-      <Sidebar page={page} setPage={setPage} open={menuOpen} setOpen={setMenuOpen} currentDay={currentDay} />
+      <Sidebar page={page} setPage={setPage} open={menuOpen} setOpen={setMenuOpen} currentDay={currentDay} user={user} onLogout={logout} />
       <main style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }} className="scrollbar-none">
         <MobileTopbar page={page} onMenu={() => setMenuOpen(true)} />
         {page === 'dashboard' && <DashboardPage setPage={setPage} currentDay={currentDay} />}
@@ -99,7 +148,7 @@ export default function App() {
 /* ═══════════════════════════════════════════════
    SIDEBAR
 ═══════════════════════════════════════════════ */
-function Sidebar({ page, setPage, open, setOpen, currentDay }: { page: Page; setPage: (p: Page) => void; open: boolean; setOpen: (v: boolean) => void; currentDay: number }) {
+function Sidebar({ page, setPage, open, setOpen, currentDay, user, onLogout }: { page: Page; setPage: (p: Page) => void; open: boolean; setOpen: (v: boolean) => void; currentDay: number; user: AuthUser; onLogout: () => void }) {
   return (
     <aside data-open={open} style={{
       width: 210, minWidth: 210, background: C.surface,
@@ -133,6 +182,18 @@ function Sidebar({ page, setPage, open, setOpen, currentDay }: { page: Page; set
 
       {/* Bottom */}
       <div style={{ padding: '10px 10px 24px', borderTop: `1px solid ${C.border}` }}>
+        <div style={{ padding: '8px 10px 14px', marginBottom: 8, borderBottom: `1px solid ${C.border}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            {user.avatarUrl ? <img src={user.avatarUrl} alt="" style={{ width: 24, height: 24, borderRadius: '50%' }} /> : <div style={{ width: 24, height: 24, borderRadius: '50%', background: C.chip }} />}
+            <div style={{ minWidth: 0 }}>
+              <div style={{ color: C.white, fontSize: 11, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.name}</div>
+              <div style={{ color: C.alt, fontSize: 9, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email || 'OAuth 계정'}</div>
+            </div>
+          </div>
+          <button onClick={onLogout} style={{ width: '100%', padding: '6px 8px', borderRadius: 7, border: `1px solid ${C.border2}`, background: 'transparent', color: C.alt, cursor: 'pointer', fontSize: 11 }}>
+            로그아웃
+          </button>
+        </div>
         <NavBtn active={page === 'result'} onClick={() => { setPage('result'); setOpen(false) }}>
           <IcoTrophy c={page === 'result' ? C.mint : '#4a4a4a'} />
           <span>100일 결과</span>
@@ -827,11 +888,49 @@ function FocusPage({ currentDay }: { currentDay: number }) {
 function DevicesPage() {
   const [qr, setQr] = useState(false)
   const [devices, setDevices] = useState<DeviceData[]>([])
+  const [pairing, setPairing] = useState<DevicePairingData | null>(null)
+  const [pendingDevice, setPendingDevice] = useState<{ kind: string; name: string; platform: string } | null>(null)
   const [error, setError] = useState('')
 
-  useEffect(() => {
-    api.devices().then(setDevices).catch((err) => setError(err.message))
-  }, [])
+  const refresh = () => api.devices().then(setDevices).catch((err) => setError(err.message))
+
+  useEffect(() => { refresh() }, [])
+
+  const startPairing = async (device: { kind: string; name: string; platform: string }) => {
+    setError('')
+    setPendingDevice(device)
+    try {
+      const created = await api.createDevicePairing(device)
+      setPairing(created)
+      setQr(true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '기기 연결 코드 생성 실패')
+    }
+  }
+
+  const completePairing = async () => {
+    if (!pairing) return
+    setError('')
+    try {
+      await api.connectDevice({ token: pairing.token })
+      setQr(false)
+      setPairing(null)
+      setPendingDevice(null)
+      await refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '기기 연결 실패')
+    }
+  }
+
+  const disconnect = async (id: number) => {
+    setError('')
+    try {
+      await api.disconnectDevice(id)
+      await refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '기기 연결 해제 실패')
+    }
+  }
 
   const illustration = (kind: string) => {
     if (kind === 'phone') return () => <IlluPhone />
@@ -840,6 +939,7 @@ function DevicesPage() {
     return () => <IlluLaptop />
   }
   const connected = devices.map((device) => ({
+    id: device.id,
     name: device.name,
     sub: device.platform,
     sync: shortTime(device.last_sync),
@@ -866,7 +966,7 @@ function DevicesPage() {
             <div style={{ fontSize: 10, color: '#333', fontFamily: "'JetBrains Mono', monospace", marginBottom: 16 }}>동기화 {d.sync}</div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button style={{ flex: 1, padding: '7px', borderRadius: 7, border: `1px solid ${C.border2}`, background: 'transparent', color: C.alt, fontSize: 11, cursor: 'pointer', fontFamily: "'Pretendard', system-ui, sans-serif" }}>설정</button>
-              <button style={{ flex: 1, padding: '7px', borderRadius: 7, border: `1px solid ${C.border2}`, background: 'transparent', color: '#3a3a3a', fontSize: 11, cursor: 'pointer', fontFamily: "'Pretendard', system-ui, sans-serif" }}>연결 해제</button>
+              <button onClick={() => disconnect(d.id)} style={{ flex: 1, padding: '7px', borderRadius: 7, border: `1px solid ${C.border2}`, background: 'transparent', color: C.faint, fontSize: 11, cursor: 'pointer', fontFamily: "'Pretendard', system-ui, sans-serif" }}>연결 해제</button>
             </div>
           </div>
         ))}
@@ -876,12 +976,12 @@ function DevicesPage() {
         <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 18 }}>추가 연결</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
           {[
-            { label: '트래커 설치', sub: 'macOS / Windows', Illu: () => <IlluLaptop dim /> },
-            { label: 'Android 앱',     sub: '연동 앱',   Illu: () => <IlluPhone  dim />, action: () => setQr(true) },
-            { label: 'Health Connect',  sub: 'Wear OS',         Illu: () => <IlluWatch  dim /> },
-            { label: 'GitHub',          sub: 'OAuth 연결',   Illu: () => <IlluGit    dim /> },
+            { label: '트래커 설치', sub: 'macOS / Windows', kind: 'computer', name: '데스크톱 트래커', platform: 'macOS / Windows', Illu: () => <IlluLaptop dim /> },
+            { label: 'Android 앱', sub: '연동 앱', kind: 'phone', name: 'Android 앱', platform: 'Android', Illu: () => <IlluPhone  dim /> },
+            { label: 'Health Connect', sub: 'Wear OS', kind: 'watch', name: 'Health Connect', platform: 'Wear OS', Illu: () => <IlluWatch  dim /> },
+            { label: 'GitHub', sub: 'OAuth 연결', kind: 'github', name: 'GitHub', platform: 'GitHub OAuth', Illu: () => <IlluGit dim /> },
           ].map((item) => (
-            <button key={item.label} onClick={item.action} style={{
+            <button key={item.label} onClick={() => startPairing(item)} style={{
               padding: '16px', background: C.surface, borderRadius: 12,
               border: `1px dashed ${C.border2}`, cursor: 'pointer', textAlign: 'left',
               transition: 'border-color 120ms',
@@ -897,19 +997,22 @@ function DevicesPage() {
       {qr && (
         <div onClick={() => setQr(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: C.raised, borderRadius: 20, padding: '36px', border: `1px solid ${C.border2}`, textAlign: 'center', maxWidth: 320 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: C.white, marginBottom: 6 }}>휴대폰 연결</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: C.white, marginBottom: 6 }}>{pendingDevice?.name || '기기'} 연결</div>
             <div style={{ fontSize: 11, color: C.alt, marginBottom: 24, lineHeight: 1.9 }}>
-              1. 100 DAYS 모바일 앱을 여세요<br />
-              2. 이 QR 코드를 스캔하세요<br />
-              3. 필요한 권한을 허용하세요
+              연결 코드가 10분 동안 유효합니다.<br />
+              외부 트래커 앱은 이 코드를 `/api/devices/connect`로 전송하면 됩니다.
             </div>
-            <div style={{ background: C.white, borderRadius: 12, padding: 16, display: 'inline-block', marginBottom: 20 }}>
-              <QRCode />
+            <div style={{ background: C.surface, borderRadius: 12, padding: '14px 16px', marginBottom: 20, border: `1px solid ${C.border2}` }}>
+              <div style={{ fontFamily: "'JetBrains Mono', monospace", color: C.mint, fontSize: 18, fontWeight: 800, wordBreak: 'break-all' }}>{pairing?.token || '생성 중'}</div>
+              <div style={{ fontSize: 10, color: C.alt, marginTop: 8 }}>{pairing ? new Date(pairing.expires_at).toLocaleTimeString('ko-KR') : ''} 만료</div>
             </div>
             <div style={{ fontSize: 10, color: C.alt, fontFamily: "'JetBrains Mono', monospace", marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
               <PulsingDot />&nbsp;기기 연결 대기 중...
             </div>
-            <button onClick={() => setQr(false)} style={{ padding: '9px 24px', borderRadius: 8, border: `1px solid ${C.border2}`, background: 'transparent', color: C.alt, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, cursor: 'pointer' }}>취소</button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setQr(false)} style={{ flex: 1, padding: '9px 14px', borderRadius: 8, border: `1px solid ${C.border2}`, background: 'transparent', color: C.alt, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, cursor: 'pointer' }}>취소</button>
+              <button onClick={completePairing} style={{ flex: 1, padding: '9px 14px', borderRadius: 8, border: 'none', background: C.mint, color: C.ink, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>이 기기로 연결</button>
+            </div>
           </div>
         </div>
       )}

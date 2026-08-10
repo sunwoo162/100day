@@ -55,6 +55,18 @@ export type DeviceData = {
   source: string | null
 }
 
+export type AuthUser = {
+  id: number
+  email: string | null
+  name: string
+  avatarUrl: string | null
+}
+
+export type DevicePairingData = {
+  token: string
+  expires_at: string
+}
+
 export type FocusSession = {
   id: number
   day_number: number
@@ -88,19 +100,27 @@ export type ResultData = {
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...(options?.headers || {}) },
   })
   if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`)
-  return res.json()
+  if (res.status === 204) return undefined as T
+  const text = await res.text()
+  return (text ? JSON.parse(text) : undefined) as T
 }
 
 export const api = {
   health: () => request<{ ok: boolean; database: string }>('/health'),
+  me: () => request<{ user: AuthUser | null }>('/auth/me'),
+  logout: () => request<void>('/auth/logout', { method: 'POST' }),
   challenge: () => request<ChallengeData>('/challenge'),
   dashboard: (day = 37) => request<DashboardData>(`/dashboard/today?day=${day}`),
   timeline: () => request<TimelineEntry[]>('/timeline'),
   analytics: (days = 30) => request<AnalyticsData>(`/analytics?days=${days}`),
   devices: () => request<DeviceData[]>('/devices'),
+  createDevicePairing: (data: { kind: string; name: string; platform: string }) => request<DevicePairingData>('/devices/pairing', { method: 'POST', body: JSON.stringify(data) }),
+  connectDevice: (data: { token: string }) => request<DeviceData>('/devices/connect', { method: 'POST', body: JSON.stringify(data) }),
+  disconnectDevice: (id: number) => request<void>(`/devices/${id}`, { method: 'DELETE' }),
   studyCategories: () => request<StudyCategory[]>('/study/categories'),
   addStudyCategory: (data: { name: string }) => request<StudyCategory>('/study/categories', { method: 'POST', body: JSON.stringify(data) }),
   focusSessions: (day = 37) => request<FocusSession[]>(`/focus/sessions?day=${day}`),
