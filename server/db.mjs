@@ -80,14 +80,6 @@ CREATE TABLE IF NOT EXISTS study_categories (
   name TEXT NOT NULL UNIQUE,
   created_at TEXT NOT NULL
 );
-CREATE TABLE IF NOT EXISTS checkins (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  day_number INTEGER NOT NULL UNIQUE,
-  focus_score INTEGER NOT NULL,
-  satisfaction_score INTEGER NOT NULL,
-  note TEXT NOT NULL DEFAULT '',
-  created_at TEXT NOT NULL
-);
 `)
 
 const focusColumns = db.prepare('PRAGMA table_info(focus_sessions)').all().map(column => column.name)

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { api, type AnalyticsData, type ChallengeData, type DashboardData, type DeviceData, type FocusSession, type ResultData, type StudyCategory, type TimelineEntry } from './lib/api'
 
-type Page = 'dashboard' | 'timeline' | 'analytics' | 'focus' | 'devices' | 'checkin' | 'result'
+type Page = 'dashboard' | 'timeline' | 'analytics' | 'focus' | 'devices' | 'result'
 
 /* ── colour tokens ── */
 const C = {
@@ -89,7 +89,6 @@ export default function App() {
         {page === 'analytics' && <AnalyticsPage />}
         {page === 'focus'     && <FocusPage currentDay={currentDay} />}
         {page === 'devices'   && <DevicesPage />}
-        {page === 'checkin'   && <CheckinPage setPage={setPage} currentDay={currentDay} />}
         {page === 'result'    && <ResultPage />}
       </main>
       {menuOpen && <div onClick={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', zIndex: 39 }} />}
@@ -134,10 +133,6 @@ function Sidebar({ page, setPage, open, setOpen, currentDay }: { page: Page; set
 
       {/* Bottom */}
       <div style={{ padding: '10px 10px 24px', borderTop: `1px solid ${C.border}` }}>
-        <NavBtn active={page === 'checkin'} onClick={() => { setPage('checkin'); setOpen(false) }}>
-          <IcoCheck c={page === 'checkin' ? C.mint : '#4a4a4a'} />
-          <span>오늘 체크인</span>
-        </NavBtn>
         <NavBtn active={page === 'result'} onClick={() => { setPage('result'); setOpen(false) }}>
           <IcoTrophy c={page === 'result' ? C.mint : '#4a4a4a'} />
           <span>100일 결과</span>
@@ -164,7 +159,7 @@ function NavBtn({ active, onClick, children }: { active: boolean; onClick: () =>
 }
 
 function MobileTopbar({ page, onMenu }: { page: Page; onMenu: () => void }) {
-  const titles: Record<Page, string> = { dashboard: '개요', timeline: '타임라인', analytics: '분석', focus: '공부', devices: '기기', checkin: '오늘 체크인', result: '100일 결과' }
+  const titles: Record<Page, string> = { dashboard: '개요', timeline: '타임라인', analytics: '분석', focus: '공부', devices: '기기', result: '100일 결과' }
   return (
     <div className="mobile-header" style={{ display: 'none', padding: '14px 20px', borderBottom: `1px solid ${C.border}`, background: C.surface, alignItems: 'center', gap: 12 }}>
       <button onClick={onMenu} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}><IcoMenu c={C.muted} /></button>
@@ -328,13 +323,13 @@ function DashboardPage({ setPage, currentDay }: { setPage: (p: Page) => void; cu
         </div>
       </div>
 
-      {/* Check-in CTA */}
+      {/* Study CTA */}
       <div style={{ marginTop: 16, background: 'linear-gradient(135deg, rgba(0,232,197,0.06) 0%, rgba(0,232,197,0.02) 100%)', borderRadius: 14, padding: '18px 24px', border: `1px solid rgba(0,232,197,0.12)`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 2 }}>오늘 체크인</div>
-          <div style={{ fontSize: 11, color: C.alt }}>집중도와 만족도를 기록하세요. 30초면 됩니다</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 2 }}>공부 기록</div>
+          <div style={{ fontSize: 11, color: C.alt }}>노트북/휴대폰 없이 하는 일을 타이머로 저장하세요.</div>
         </div>
-        <button onClick={() => setPage('checkin')} style={{ padding: '9px 20px', borderRadius: 50, background: C.mint, color: C.ink, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, fontWeight: 700, border: 'none', cursor: 'pointer', letterSpacing: '0.04em' }}>
+        <button onClick={() => setPage('focus')} style={{ padding: '9px 20px', borderRadius: 50, background: C.mint, color: C.ink, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, fontWeight: 700, border: 'none', cursor: 'pointer', letterSpacing: '0.04em' }}>
           Start →
         </button>
       </div>
@@ -423,11 +418,6 @@ function TimelinePage({ currentDay }: { currentDay: number }) {
             </div>
           )) : <div style={{ fontSize: 12, color: C.alt, padding: '12px 0' }}>아직 저장된 기록이 없습니다.</div>}
 
-          <div style={{ marginTop: 16, marginBottom: 12 }}>
-            <DotScore label="공부 집중도" value={d?.focus_score ?? 0} color={C.mint} />
-            <DotScore label="만족도" value={d?.satisfaction_score ?? 0} color={C.mintMuted} />
-          </div>
-
           {/* GitHub mini heatrow */}
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 6 }}>커밋</div>
@@ -437,25 +427,7 @@ function TimelinePage({ currentDay }: { currentDay: number }) {
             </div>
           </div>
 
-          <div style={{ background: C.surface, borderRadius: 10, padding: '12px 14px' }}>
-            <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 6 }}>메모</div>
-            <p style={{ fontSize: 12, color: C.muted, margin: 0, lineHeight: 1.7 }}>{d?.note || '아직 기록된 메모가 없습니다.'}</p>
-          </div>
         </div>
-      </div>
-    </div>
-  )
-}
-
-function DotScore({ label, value, color }: { label: string; value: number; color: string }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-      <span style={{ fontSize: 12, color: C.muted, fontWeight: 600 }}>{label}</span>
-      <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
-        {Array.from({ length: 10 }, (_, i) => (
-          <div key={i} style={{ width: 7, height: 7, borderRadius: 1, background: i < value ? color : C.border2, transition: 'background 120ms' }} />
-        ))}
-        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.alt, marginLeft: 4 }}>{value}</span>
       </div>
     </div>
   )
@@ -945,109 +917,6 @@ function DevicesPage() {
 }
 
 /* ═══════════════════════════════════════════════
-   DAILY CHECK-IN
-═══════════════════════════════════════════════ */
-function CheckinPage({ setPage, currentDay }: { setPage: (p: Page) => void; currentDay: number }) {
-  const [focus, setFocus] = useState(0)
-  const [sat, setSat] = useState(0)
-  const [note, setNote] = useState('')
-  const [done, setDone] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
-
-  useEffect(() => {
-    api.checkin(currentDay)
-      .then((checkin) => {
-        if (!checkin) return
-        setFocus(checkin.focus_score)
-        setSat(checkin.satisfaction_score)
-        setNote(checkin.note)
-        setDone(true)
-      })
-      .catch((err) => setError(err.message))
-  }, [currentDay])
-
-  const save = async () => {
-    setSaving(true)
-    setError('')
-    try {
-      await api.saveCheckin({
-        day_number: currentDay,
-        focus_score: focus,
-        satisfaction_score: sat,
-        note,
-      })
-      setDone(true)
-      setTimeout(() => setPage('dashboard'), 900)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '체크인 저장 실패')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div style={{ padding: '40px 36px', maxWidth: 500 }}>
-      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.alt, letterSpacing: '0.15em', marginBottom: 6 }}>오늘 체크인</div>
-      <div style={{ fontSize: 28, fontWeight: 900, color: C.white, marginBottom: 4, letterSpacing: '-0.02em' }}>{currentDay}일차</div>
-      <div style={{ fontSize: 11, color: C.alt, marginBottom: 40 }}>30초 안에 끝납니다.</div>
-      {error && <div style={{ color: C.mintMuted, fontSize: 12, marginBottom: 18 }}>{error}</div>}
-
-      <ScoreInput label="오늘 얼마나 집중했나요?" value={focus} set={setFocus} color={C.mint} />
-      <ScoreInput label="오늘 만족도는 어떤가요?" value={sat} set={setSat} color={C.mintMuted} />
-
-      <div style={{ marginBottom: 36 }}>
-        <div style={{ fontSize: 13, color: C.muted, marginBottom: 10 }}>오늘을 한 줄로 남기기</div>
-        <input value={note} onChange={e => setNote(e.target.value)}
-          placeholder="오늘 하루를 한 문장으로..."
-          style={{
-            width: '100%', padding: '13px 15px', background: C.raised,
-            border: `1px solid ${C.border2}`, borderRadius: 10, color: C.white,
-            fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 14,
-            outline: 'none', transition: 'border-color 120ms',
-          }}
-        />
-      </div>
-
-      <button onClick={save} disabled={focus === 0 || sat === 0 || saving} style={{
-        width: '100%', padding: '15px', borderRadius: 50, border: 'none', cursor: focus && sat && !saving ? 'pointer' : 'not-allowed',
-        background: done ? C.mintMuted : focus && sat ? C.mint : '#1e1e1e',
-        color: done || (focus && sat) ? C.ink : C.alt,
-        fontFamily: "'Pretendard', system-ui, sans-serif",
-        fontSize: 13, fontWeight: 700, letterSpacing: '0.05em',
-        transition: 'all 200ms',
-      }}>
-        {saving ? '저장 중...' : done ? '✓  저장됨' : '오늘 저장'}
-      </button>
-    </div>
-  )
-}
-
-function ScoreInput({ label, value, set, color }: { label: string; value: number; set: (n: number) => void; color: string }) {
-  return (
-    <div style={{ marginBottom: 30 }}>
-      <div style={{ fontSize: 13, color: C.muted, marginBottom: 14 }}>{label}</div>
-      <div style={{ display: 'flex', gap: 6 }}>
-        {Array.from({ length: 10 }, (_, i) => i + 1).map(n => (
-          <button key={n} onClick={() => set(n)} style={{
-            flex: 1, padding: '10px 0', borderRadius: 7, border: 'none', cursor: 'pointer',
-            background: n <= value ? color : C.raised,
-            color: n <= value ? C.ink : '#3a3a3a',
-            fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: n <= value ? 700 : 400,
-            transition: 'all 100ms',
-          }}>
-            {n}
-          </button>
-        ))}
-      </div>
-      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: value ? color : '#2a2a2a', marginTop: 7 }}>
-        {value ? `${value} / 10` : '선택하세요'}
-      </div>
-    </div>
-  )
-}
-
-/* ═══════════════════════════════════════════════
    RESULT PAGE
 ═══════════════════════════════════════════════ */
 function ResultPage() {
@@ -1459,9 +1328,6 @@ function IcoTimer({ c }: { c: string }) {
 }
 function IcoDevice({ c }: { c: string }) {
   return <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="1.5" y="2.5" width="8" height="10" rx="1.5" stroke={c} strokeWidth="1.1"/><path d="M11 4.5h1a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-1" stroke={c} strokeWidth="1.1"/></svg>
-}
-function IcoCheck({ c }: { c: string }) {
-  return <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M2.5 7.5L6 11l6.5-7" stroke={c} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
 }
 function IcoTrophy({ c }: { c: string }) {
   return <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M4.5 1.5h6v6a3 3 0 0 1-6 0V1.5z" stroke={c} strokeWidth="1.1"/><path d="M4.5 4.5H3a1.5 1.5 0 1 0 0 3h1.5M10.5 4.5H12a1.5 1.5 0 1 1 0 3h-1.5" stroke={c} strokeWidth="1.1"/><path d="M7.5 10.5v2M5 12.5h5" stroke={c} strokeWidth="1.1" strokeLinecap="round"/></svg>

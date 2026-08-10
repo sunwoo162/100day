@@ -110,8 +110,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (url.pathname === '/api/timeline') {
-      const rows = db.prepare(`SELECT d.*, c.focus_score, c.satisfaction_score, c.note
-        FROM daily_metrics d LEFT JOIN checkins c ON c.day_number = d.day_number ORDER BY d.day_number`).all()
+      const rows = db.prepare('SELECT * FROM daily_metrics ORDER BY day_number').all()
       return json(res, 200, rows)
     }
 
@@ -160,23 +159,6 @@ const server = http.createServer(async (req, res) => {
       ensureMetric(day)
       db.prepare('UPDATE daily_metrics SET focus_minutes = focus_minutes + ? WHERE day_number = ?').run(duration, day)
       return json(res, 201, { id: Number(result.lastInsertRowid), day_number: day, category, note, started_at: started, ended_at: ended, duration_minutes: duration })
-    }
-
-    if (url.pathname === '/api/checkins' && req.method === 'GET') {
-      const day = requestedDay(url)
-      return json(res, 200, db.prepare('SELECT * FROM checkins WHERE day_number = ?').get(day) || null)
-    }
-
-    if (url.pathname === '/api/checkins' && req.method === 'POST') {
-      const body = await readBody(req)
-      const day = Number(body.day_number || currentDay())
-      const focus = Math.max(1, Math.min(10, Number(body.focus_score || 5)))
-      const satisfaction = Math.max(1, Math.min(10, Number(body.satisfaction_score || 5)))
-      const note = String(body.note || '')
-      db.prepare(`INSERT INTO checkins (day_number, focus_score, satisfaction_score, note, created_at)
-        VALUES (?, ?, ?, ?, ?) ON CONFLICT(day_number) DO UPDATE SET focus_score=excluded.focus_score, satisfaction_score=excluded.satisfaction_score, note=excluded.note, created_at=excluded.created_at`)
-        .run(day, focus, satisfaction, note, new Date().toISOString())
-      return json(res, 200, db.prepare('SELECT * FROM checkins WHERE day_number = ?').get(day))
     }
 
     if (url.pathname === '/api/result') {

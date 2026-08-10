@@ -38,9 +38,6 @@ export type TimelineEntry = {
   exercise_minutes: number
   development_minutes: number
   github_commits: number
-  focus_score: number | null
-  satisfaction_score: number | null
-  note: string | null
 }
 
 export type AnalyticsData = {
@@ -73,15 +70,6 @@ export type StudyCategory = {
   id: number
   name: string
 }
-
-export type CheckinData = {
-  id: number
-  day_number: number
-  focus_score: number
-  satisfaction_score: number
-  note: string
-  created_at: string
-} | null
 
 export type ResultData = {
   totals: {
@@ -119,7 +107,5 @@ export const api = {
   addStudyCategory: (data: { name: string }) => request<StudyCategory>('/study/categories', { method: 'POST', body: JSON.stringify(data) }),
   focusSessions: (day = 37) => request<FocusSession[]>(`/focus/sessions?day=${day}`),
   addFocusSession: (data: unknown) => request<FocusSession>('/focus/sessions', { method: 'POST', body: JSON.stringify(data) }),
-  checkin: (day = 37) => request<CheckinData>(`/checkins?day=${day}`),
-  saveCheckin: (data: unknown) => request<NonNullable<CheckinData>>('/checkins', { method: 'POST', body: JSON.stringify(data) }),
   result: () => request<ResultData>('/result'),
 }
