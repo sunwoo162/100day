@@ -43,6 +43,20 @@ npm run dev
 - API: http://localhost:4000
 - API 상태 확인: http://localhost:4000/api/health
 
+## Docker 실행
+
+```bash
+docker compose up --build
+```
+
+로컬 Docker 실행 주소:
+
+- Web/API: http://localhost:4000
+- Google callback: http://localhost:4000/api/auth/google/callback
+- GitHub callback: http://localhost:4000/api/auth/github/callback
+
+배포 환경에서는 `WEB_ORIGIN`, `API_ORIGIN`을 실제 HTTPS 도메인으로 설정하고, OAuth 콘솔에도 같은 callback URL을 등록합니다.
+
 ## DB / 실제 기록 데이터
 
 `npm run dev` 또는 `npm run dev:api`를 처음 실행하면 `server/data/100days.db`가 자동 생성됩니다. DB에는 목데이터를 넣지 않고, 기본 100일 챌린지와 공부 카테고리만 준비합니다.

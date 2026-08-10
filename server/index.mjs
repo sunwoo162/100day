@@ -1,8 +1,14 @@
 import http from 'node:http'
 import { URL } from 'node:url'
 import crypto from 'node:crypto'
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { db, dbPath } from './db.mjs'
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const rootDir = path.resolve(__dirname, '..')
+const distDir = path.join(rootDir, 'dist')
 const PORT = Number(process.env.API_PORT || 4000)
 const WEB_ORIGIN = process.env.WEB_ORIGIN || 'http://localhost:5173'
 const API_ORIGIN = process.env.API_ORIGIN || `http://localhost:${PORT}`
@@ -34,6 +40,34 @@ function readBody(req) {
     req.on('data', c => data += c)
     req.on('end', () => { try { resolve(data ? JSON.parse(data) : {}) } catch (e) { reject(e) } })
   })
+}
+const contentTypes = {
+  '.css': 'text/css; charset=utf-8',
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+}
+function staticFile(res, filePath) {
+  const ext = path.extname(filePath)
+  res.writeHead(200, { 'Content-Type': contentTypes[ext] || 'application/octet-stream' })
+  fs.createReadStream(filePath).pipe(res)
+}
+function serveStatic(req, res, url) {
+  if (!['GET', 'HEAD'].includes(req.method || '')) return json(res, 405, { error: '허용되지 않는 메서드입니다' })
+  const rawPath = decodeURIComponent(url.pathname === '/' ? '/index.html' : url.pathname)
+  const requested = path.normalize(path.join(distDir, rawPath))
+  if (!requested.startsWith(distDir)) return json(res, 403, { error: '잘못된 경로입니다' })
+  const filePath = fs.existsSync(requested) && fs.statSync(requested).isFile() ? requested : path.join(distDir, 'index.html')
+  if (!fs.existsSync(filePath)) return json(res, 404, { error: '빌드된 프론트엔드가 없습니다. npm run build를 실행하세요.' })
+  if (req.method === 'HEAD') {
+    res.writeHead(200, { 'Content-Type': contentTypes[path.extname(filePath)] || 'application/octet-stream' })
+    return res.end()
+  }
+  return staticFile(res, filePath)
 }
 function todayKst() {
   return new Intl.DateTimeFormat('en-CA', {
@@ -400,7 +434,8 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { totals, first, last, rows })
     }
 
-    return json(res, 404, { error: '찾을 수 없습니다' })
+    if (url.pathname.startsWith('/api/')) return json(res, 404, { error: '찾을 수 없습니다' })
+    return serveStatic(req, res, url)
   } catch (error) {
     console.error(error)
     return json(res, 500, { error: error.message })
