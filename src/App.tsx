@@ -624,23 +624,11 @@ function Legend({ color, label }: { color: string; label: string }) {
   )
 }
 
-function EmptyChart({ height, label = '-' }: { height: number; label?: string }) {
+function EmptyChart({ height }: { height: number; label?: string }) {
   return (
-    <div style={{
-      height,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      border: `1px dashed ${C.border2}`,
-      borderRadius: 8,
-      color: C.mint,
-      fontFamily: "'JetBrains Mono', monospace",
-      fontSize: 28,
-      fontWeight: 800,
-      lineHeight: 1,
-    }}>
-      {label}
-    </div>
+    <svg width="100%" viewBox={`0 0 300 ${height}`} preserveAspectRatio="none" style={{ display: 'block', height }}>
+      <line x1="0" y1={height / 2} x2="300" y2={height / 2} stroke={C.mint} strokeWidth="2" strokeLinecap="round" opacity="0.75" />
+    </svg>
   )
 }
 
