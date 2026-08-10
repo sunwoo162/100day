@@ -380,7 +380,7 @@ function TimelinePage({ currentDay }: { currentDay: number }) {
         {/* Grid */}
         <div style={{ background: C.raised, borderRadius: 14, padding: '24px', border: `1px solid ${C.border}` }}>
           <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 16 }}>전체 날짜</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: 6 }}>
+          <div style={{ display: 'grid', gridAutoFlow: 'column', gridTemplateRows: 'repeat(7, 20px)', gridAutoColumns: '20px', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
             {Array.from({ length: 100 }, (_, i) => i + 1).map((n) => {
               const row = rowByDay.get(n)
               const minutes = usageMinutes(row)
@@ -389,19 +389,16 @@ function TimelinePage({ currentDay }: { currentDay: number }) {
               const selected = sel === n
               return (
                 <button key={n} onClick={() => !future && setSel(n)} style={{
-                  aspectRatio: '1', borderRadius: 6, border: 'none',
+                  width: 20, height: 20, borderRadius: 5, border: 'none',
                   cursor: future ? 'default' : 'pointer',
                   background: heatColor(minutes, future, today, selected),
-                  color: today ? C.ink : minutes > 0 ? C.soft : '#3a3a3a',
-                  fontSize: 10, fontFamily: "'JetBrains Mono', monospace",
-                  fontWeight: today ? 700 : 400,
                   opacity: future ? 0.3 : 1,
-                  outline: selected && !today ? `1px solid ${C.mint}` : 'none',
-                  outlineOffset: 1,
-                  transition: 'all 100ms', padding: 0,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  outline: selected ? `2px solid ${C.mint}` : 'none',
+                  outlineOffset: 2,
+                  transition: 'background 120ms, opacity 120ms, outline-color 120ms',
+                  padding: 0,
                 }} title={`${n}일차 · ${fmtMinutes(minutes)}`}>
-                  {n}
+                  <span style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0, 0, 0, 0)', whiteSpace: 'nowrap', border: 0 }}>{n}일차</span>
                 </button>
               )
             })}
