@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { api, type AnalyticsData, type DashboardData, type DeviceData, type FocusSession, type ResultData, type TimelineEntry } from './lib/api'
 
 type Page = 'dashboard' | 'timeline' | 'analytics' | 'focus' | 'devices' | 'checkin' | 'result'
 
@@ -28,6 +29,45 @@ const NAV: { id: Page; label: string; Icon: (p: { active: boolean }) => React.Re
   { id: 'focus',     label: '집중',     Icon: ({ active }) => <IcoTimer  c={active ? C.mint : '#4a4a4a'} /> },
   { id: 'devices',   label: '기기',   Icon: ({ active }) => <IcoDevice c={active ? C.mint : '#4a4a4a'} /> },
 ]
+
+function fmtMinutes(min: number) {
+  const h = Math.floor(min / 60)
+  const m = min % 60
+  if (h <= 0) return `${m}분`
+  return `${h}시간 ${String(m).padStart(2, '0')}분`
+}
+
+function fmtDelta(delta: number, unit = '분') {
+  if (delta === 0) return '어제와 같음'
+  return `어제보다 ${delta > 0 ? '+' : '-'}${Math.abs(delta).toLocaleString()}${unit}`
+}
+
+function parseHourValue(display: string) {
+  const hours = display.match(/(\d+)h/)?.[1] ?? '0'
+  const mins = display.match(/(\d+)m/)?.[1] ?? '0'
+  return `${Number(hours)}시간 ${String(Number(mins)).padStart(2, '0')}분`
+}
+
+function shortTime(iso: string | null) {
+  if (!iso) return '아직 없음'
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return '알 수 없음'
+  const diff = Math.max(0, Date.now() - date.getTime())
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return '방금 전'
+  if (mins < 60) return `${mins}분 전`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}시간 전`
+  return `${Math.floor(hours / 24)}일 전`
+}
+
+function LoadingBlock({ label = '데이터를 불러오는 중입니다' }: { label?: string }) {
+  return <div style={{ padding: 36, color: C.alt, fontSize: 13 }}>{label}</div>
+}
+
+function ErrorBlock({ message }: { message: string }) {
+  return <div style={{ padding: 36, color: C.mintMuted, fontSize: 13 }}>{message}</div>
+}
 
 export default function App() {
   const [page, setPage] = useState<Page>('dashboard')
@@ -130,6 +170,13 @@ function MobileTopbar({ page, onMenu }: { page: Page; onMenu: () => void }) {
    DASHBOARD
 ═══════════════════════════════════════════════ */
 function DashboardPage({ setPage }: { setPage: (p: Page) => void }) {
+  const [data, setData] = useState<DashboardData | null>(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    api.dashboard(37).then(setData).catch((err) => setError(err.message))
+  }, [])
+
   const spark7 = [4.1, 5.2, 6.3, 5.8, 7.1, 6.4, 6.2]
   const spark7b = [5.3, 4.8, 5.6, 6.1, 4.9, 5.0, 4.1]
   const spark7c = [1.8, 2.4, 2.1, 3.2, 2.9, 3.1, 3.3]
@@ -139,34 +186,38 @@ function DashboardPage({ setPage }: { setPage: (p: Page) => void }) {
   const spark7g = [1.2, 1.8, 2.1, 2.4, 2.0, 2.3, 2.5]
   const spark7h = [2, 4, 5, 6, 3, 8, 7]
 
+  if (error) return <ErrorBlock message={error} />
+  if (!data) return <LoadingBlock />
+
+  const m = data.metrics
   const stats = [
-    { id: 'pc',    label: 'PC',           value: '6시간 21분', sub: '어제보다 +24분', up: true,  spark: spark7,  unit: 'h', max: 10, color: C.mint },
-    { id: 'phone', label: '휴대폰',        value: '4시간 13분', sub: '어제보다 -32분', up: false, spark: spark7b, unit: 'h', max: 10, color: C.faint },
-    { id: 'focus', label: '집중',        value: '3시간 17분', sub: '어제보다 +41분', up: true,  spark: spark7c, unit: 'h', max: 5,  color: C.mint },
-    { id: 'sleep', label: '수면',        value: '6시간 42분', sub: '어제보다 -18분', up: false, spark: spark7d, unit: 'h', max: 9,  color: C.mintMuted },
-    { id: 'steps', label: '걸음',        value: '8,421',  sub: '어제보다 +1,203', up: true, spark: spark7e, unit: 'k', max: 12000, color: C.mint },
-    { id: 'ex',    label: '운동',     value: '27분', sub: '어제와 같음', up: true, spark: spark7f, unit: 'm', max: 90, color: C.mintMuted },
-    { id: 'dev',   label: '개발',  value: '2시간 31분', sub: '어제보다 +12분', up: true,  spark: spark7g, unit: 'h', max: 5,  color: C.mintBright },
-    { id: 'git',   label: 'GitHub',       value: '커밋 7개', sub: '어제보다 +3', up: true,  spark: spark7h, unit: '',  max: 12, color: C.mint },
+    { id: 'pc', label: 'PC', value: parseHourValue(m.pc.display || '0h 00m'), sub: fmtDelta(m.pc.delta), up: m.pc.delta >= 0, spark: spark7, max: 10, color: C.mint },
+    { id: 'phone', label: '휴대폰', value: parseHourValue(m.phone.display || '0h 00m'), sub: fmtDelta(m.phone.delta), up: m.phone.delta <= 0, spark: spark7b, max: 10, color: C.faint },
+    { id: 'focus', label: '집중', value: parseHourValue(m.focus.display || '0h 00m'), sub: fmtDelta(m.focus.delta), up: m.focus.delta >= 0, spark: spark7c, max: 5, color: C.mint },
+    { id: 'sleep', label: '수면', value: parseHourValue(m.sleep.display || '0h 00m'), sub: fmtDelta(m.sleep.delta), up: m.sleep.delta >= 0, spark: spark7d, max: 9, color: C.mintMuted },
+    { id: 'steps', label: '걸음', value: (m.steps.value || 0).toLocaleString(), sub: fmtDelta(m.steps.delta, ''), up: m.steps.delta >= 0, spark: spark7e, max: 12000, color: C.mint },
+    { id: 'ex', label: '운동', value: fmtMinutes(m.exercise.minutes || 0), sub: fmtDelta(m.exercise.delta), up: m.exercise.delta >= 0, spark: spark7f, max: 90, color: C.mintMuted },
+    { id: 'dev', label: '개발', value: parseHourValue(m.development.display || '0h 00m'), sub: fmtDelta(m.development.delta), up: m.development.delta >= 0, spark: spark7g, max: 5, color: C.mintBright },
+    { id: 'git', label: 'GitHub', value: `커밋 ${m.github.commits || 0}개`, sub: fmtDelta(m.github.delta, ''), up: m.github.delta >= 0, spark: spark7h, max: 12, color: C.mint },
   ]
 
-  const timeline = [
-    { time: '07:10', label: '기상',        dot: C.mintMuted },
-    { time: '08:00', label: '학교',          dot: '#3a3a3a' },
-    { time: '16:21', label: 'VS Code',         dot: C.mint },
-    { time: '18:03', label: 'YouTube',         dot: '#3a3a3a' },
-    { time: '19:32', label: '집중 세션',   dot: C.mintBright },
-    { time: '22:14', label: 'GitHub 커밋',   dot: C.mint },
-    { time: '01:12', label: '수면',           dot: '#2a2a2a' },
-  ]
-
-  const apps = [
-    { name: 'VS Code',    dur: '2시간 31분', pct: 100, color: C.mint },
-    { name: 'YouTube',    dur: '1시간 21분', pct: 54,  color: '#2e2e2e' },
-    { name: 'Chrome',     dur: '57분',    pct: 38,  color: '#2e2e2e' },
-    { name: 'Instagram',  dur: '48분',    pct: 32,  color: '#2e2e2e' },
-    { name: 'Discord',    dur: '31분',    pct: 20,  color: '#2e2e2e' },
-  ]
+  const maxAppMinutes = Math.max(1, ...data.apps.map((app) => app.minutes))
+  const apps = data.apps.map((app, i) => ({
+    name: app.name,
+    dur: fmtMinutes(app.minutes),
+    pct: Math.round((app.minutes / maxAppMinutes) * 100),
+    color: i === 0 ? C.mint : '#2e2e2e',
+  }))
+  const timeline = data.events.map((event) => ({
+    time: event.time,
+    label: event.label
+      .replace('Wake up', '기상')
+      .replace('School', '학교')
+      .replace('Focus Session', '집중 세션')
+      .replace('GitHub Commit', 'GitHub 커밋')
+      .replace('Sleep', '수면'),
+    dot: event.type === 'development' ? C.mint : event.type === 'focus' ? C.mintBright : event.type === 'health' ? C.mintMuted : '#3a3a3a',
+  }))
 
   /* device ring data: laptop=6h21, phone=4h13, watch=active all day */
   const deviceTotal = 6.35 + 4.22 + 8.67
@@ -215,9 +266,9 @@ function DashboardPage({ setPage }: { setPage: (p: Page) => void }) {
           <DeviceRing pcts={devPcts} />
           <div style={{ marginTop: 18, width: '100%' }}>
             {[
-              { label: '노트북', val: '6시간 21분', color: C.mint },
-              { label: '휴대폰',  val: '4시간 13분', color: C.mintMuted },
-              { label: '워치',  val: '8시간 40분', color: '#333' },
+              { label: '노트북', val: parseHourValue(m.pc.display || '0h 00m'), color: C.mint },
+              { label: '휴대폰',  val: parseHourValue(m.phone.display || '0h 00m'), color: C.mintMuted },
+              { label: '수면/워치',  val: parseHourValue(m.sleep.display || '0h 00m'), color: '#333' },
             ].map((d) => (
               <div key={d.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 9 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
@@ -284,22 +335,25 @@ function DashboardPage({ setPage }: { setPage: (p: Page) => void }) {
 ═══════════════════════════════════════════════ */
 function TimelinePage() {
   const [sel, setSel] = useState(37)
+  const [rows, setRows] = useState<TimelineEntry[]>([])
+  const [error, setError] = useState('')
 
-  type DayEntry = { pc: string; phone: string; focus: string; sleep: string; steps: string; focusScore: number; sat: number; note: string; commits: number }
-  const db: Record<number, DayEntry> = {
-    1:  { pc: '4시간 20분', phone: '6시간 21분', focus: '42분',    sleep: '5시간 48분', steps: '3,120', focusScore: 3, sat: 4, note: '챌린지 첫날. 기대되면서도 어색하다.', commits: 2 },
-    23: { pc: '7시간 12분', phone: '5시간 03분', focus: '1시간 44분', sleep: '5시간 51분', steps: '4,231', focusScore: 5, sat: 6, note: '오늘은 집중이 잘 안 됐다. 내일은 더 잘 할 수 있을 것 같다.', commits: 4 },
-    37: { pc: '6시간 21분', phone: '4시간 13분', focus: '3시간 17분', sleep: '6시간 42분', steps: '8,421', focusScore: 8, sat: 7, note: 'VS Code에서 꽤 오래 작업했다. 집중이 잘 됐다.', commits: 7 },
-  }
-  const d: DayEntry = db[sel] ?? { pc: '5시간 30분', phone: '4시간 10분', focus: '2시간 00분', sleep: '7시간 00분', steps: '6,200', focusScore: 6, sat: 6, note: '평범하지만 꾸준한 하루.', commits: 3 }
+  useEffect(() => {
+    api.timeline().then(setRows).catch((err) => setError(err.message))
+  }, [])
+
+  const completedDays = rows.filter((row) => row.day_number <= 37).length || 37
+  const d = rows.find((row) => row.day_number === sel) ?? rows[0]
+  if (error) return <ErrorBlock message={error} />
+  if (!d) return <LoadingBlock />
 
   return (
     <div style={{ padding: '32px 36px' }}>
       <div style={{ marginBottom: 28 }}>
         <div style={{ fontSize: 44, fontWeight: 900, color: C.white, letterSpacing: '-0.03em', lineHeight: 1 }}>100 DAYS</div>
         <div style={{ display: 'flex', gap: 20, marginTop: 8 }}>
-          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: C.mint }}>37일 완료</span>
-          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: C.alt }}>63일 남음</span>
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: C.mint }}>{completedDays}일 완료</span>
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: C.alt }}>{100 - completedDays}일 남음</span>
         </div>
       </div>
 
@@ -309,9 +363,9 @@ function TimelinePage() {
           <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 16 }}>전체 날짜</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: 6 }}>
             {Array.from({ length: 100 }, (_, i) => i + 1).map((n) => {
-              const done = n < 37
-              const today = n === 37
-              const future = n > 37
+              const done = n < completedDays
+              const today = n === completedDays
+              const future = n > completedDays
               return (
                 <button key={n} onClick={() => !future && setSel(n)} style={{
                   aspectRatio: '1', borderRadius: 6, border: 'none',
@@ -347,7 +401,7 @@ function TimelinePage() {
           <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 4 }}>선택한 날짜</div>
           <div style={{ fontSize: 34, fontWeight: 900, color: C.white, letterSpacing: '-0.03em', marginBottom: 18 }}>{sel}일차</div>
 
-          {[['PC', d.pc], ['휴대폰', d.phone], ['집중', d.focus], ['수면', d.sleep], ['걸음', d.steps]].map(([k, v]) => (
+          {[['PC', fmtMinutes(d.pc_minutes)], ['휴대폰', fmtMinutes(d.phone_minutes)], ['집중', fmtMinutes(d.focus_minutes)], ['수면', fmtMinutes(d.sleep_minutes)], ['걸음', d.steps.toLocaleString()]].map(([k, v]) => (
             <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 0', borderBottom: `1px solid ${C.border}` }}>
               <span style={{ fontSize: 11, color: C.alt }}>{k}</span>
               <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: C.muted }}>{v}</span>
@@ -364,13 +418,13 @@ function TimelinePage() {
             <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 6 }}>커밋</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <CommitPips count={d.commits} />
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: C.mint }}>{d.commits}</span>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: C.mint }}>{d.github_commits}</span>
             </div>
           </div>
 
           <div style={{ background: C.surface, borderRadius: 10, padding: '12px 14px' }}>
             <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 6 }}>메모</div>
-            <p style={{ fontSize: 12, color: C.muted, margin: 0, lineHeight: 1.7 }}>{d.note}</p>
+            <p style={{ fontSize: 12, color: C.muted, margin: 0, lineHeight: 1.7 }}>{d.note || '아직 기록된 메모가 없습니다.'}</p>
           </div>
         </div>
       </div>
@@ -407,15 +461,23 @@ function CommitPips({ count }: { count: number }) {
 ═══════════════════════════════════════════════ */
 function AnalyticsPage() {
   const [period, setPeriod] = useState<'7' | '30' | '100'>('30')
+  const [data, setData] = useState<AnalyticsData | null>(null)
+  const [error, setError] = useState('')
 
-  const screenPc    = [5.2, 7.8, 6.4, 8.1, 6.7, 4.2, 6.2, 5.9, 7.3, 6.8, 7.1, 5.4, 6.6, 7.2]
-  const screenPhone = [4.8, 5.3, 4.6, 4.9, 5.5, 6.8, 4.1, 4.4, 5.1, 4.7, 5.0, 3.8, 4.3, 4.1]
-  const sleepData   = [7.2, 6.8, 7.5, 6.2, 7.8, 8.1, 6.4, 7.0, 6.9, 7.3, 6.7, 7.8, 8.0, 6.5]
-  const focusData   = [2.1, 3.4, 1.8, 4.2, 3.1, 2.7, 3.8, 4.1, 2.4, 3.6, 2.9, 4.4, 3.2, 2.8]
-  const stepsData   = [6200, 7400, 5800, 8100, 7900, 6700, 8421, 5900, 7200, 8800, 6100, 7700, 8300, 6900]
+  useEffect(() => {
+    api.analytics(Number(period)).then(setData).catch((err) => setError(err.message))
+  }, [period])
 
-  /* github heatmap — 37 days, 0-8 commits */
-  const ghData = Array.from({ length: 37 }, (_, i) => Math.floor(Math.abs(Math.sin(i * 0.7) * 8)))
+  if (error) return <ErrorBlock message={error} />
+  if (!data) return <LoadingBlock />
+
+  const screenPc = data.rows.map((row) => row.pc_minutes / 60)
+  const screenPhone = data.rows.map((row) => row.phone_minutes / 60)
+  const sleepData = data.rows.map((row) => row.sleep_minutes / 60)
+  const focusData = data.rows.map((row) => row.focus_minutes / 60)
+  const stepsData = data.rows.map((row) => row.steps)
+  const ghData = data.rows.map((row) => row.github_commits)
+  const avg = (arr: number[]) => arr.length ? arr.reduce((a, v) => a + v, 0) / arr.length : 0
 
   const insights = [
     { icon: '↑', text: '7시간 이상 자면 집중도가 24% 더 좋아집니다.' },
@@ -424,13 +486,13 @@ function AnalyticsPage() {
     { icon: '↑', text: '처음 10일 대비 VS Code 사용량이 31% 늘었습니다.' },
   ]
 
-  const apps = [
-    { name: 'VS Code',   pct: 100, hours: 81, color: C.mint },
-    { name: 'YouTube',   pct: 53,  hours: 43, color: '#2a2a2a' },
-    { name: 'Chrome',    pct: 38,  hours: 31, color: '#2a2a2a' },
-    { name: 'Instagram', pct: 32,  hours: 26, color: '#2a2a2a' },
-    { name: 'Discord',   pct: 22,  hours: 18, color: '#2a2a2a' },
-  ]
+  const maxAppMinutes = Math.max(1, ...data.topApps.map((app) => app.minutes))
+  const apps = data.topApps.map((app, i) => ({
+    name: app.name,
+    pct: Math.round((app.minutes / maxAppMinutes) * 100),
+    hours: Math.round(app.minutes / 60),
+    color: i === 0 ? C.mint : '#2a2a2a',
+  }))
 
   return (
     <div style={{ padding: '32px 36px' }}>
@@ -465,7 +527,7 @@ function AnalyticsPage() {
         {/* Sleep */}
         <ChartCard title="수면" subtitle="시간 / 밤">
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12 }}>
-            <span style={{ fontSize: 26, fontWeight: 800, color: C.white }}>7.1시간</span>
+            <span style={{ fontSize: 26, fontWeight: 800, color: C.white }}>{avg(sleepData).toFixed(1)}시간</span>
             <span style={{ fontSize: 10, color: C.mintMuted }}>평균</span>
           </div>
           <AreaChart data={sleepData} maxVal={9} color={C.mintMuted} h={90} />
@@ -474,7 +536,7 @@ function AnalyticsPage() {
         {/* Focus */}
         <ChartCard title="집중 시간" subtitle="시간 / 일">
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12 }}>
-            <span style={{ fontSize: 26, fontWeight: 800, color: C.white }}>3.2시간</span>
+            <span style={{ fontSize: 26, fontWeight: 800, color: C.white }}>{avg(focusData).toFixed(1)}시간</span>
             <span style={{ fontSize: 10, color: C.mint }}>평균</span>
           </div>
           <BarChartSVG data={focusData} maxVal={5} color={C.mint} h={90} />
@@ -483,7 +545,7 @@ function AnalyticsPage() {
         {/* Steps */}
         <ChartCard title="걸음 수" subtitle="일일 걸음 수">
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12 }}>
-            <span style={{ fontSize: 26, fontWeight: 800, color: C.white }}>7.2천</span>
+            <span style={{ fontSize: 26, fontWeight: 800, color: C.white }}>{(avg(stepsData) / 1000).toFixed(1)}천</span>
             <span style={{ fontSize: 10, color: C.mint }}>평균</span>
           </div>
           <BarChartSVG data={stepsData.map(v => v / 1000)} maxVal={10} color="#2a2a2a" accent={C.mint} h={90} />
@@ -492,7 +554,7 @@ function AnalyticsPage() {
 
       {/* GitHub heatmap */}
       <div style={{ background: C.raised, borderRadius: 14, padding: '20px 24px', border: `1px solid ${C.border}`, marginBottom: 16 }}>
-        <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 14 }}>GITHUB 활동 · 37일</div>
+        <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 14 }}>GITHUB 활동 · {data.days}일</div>
         <GithubHeatmap data={ghData} />
       </div>
 
@@ -577,15 +639,18 @@ function FocusPage() {
   const [running, setRunning] = useState(false)
   const [secs, setSecs] = useState(0)
   const [cat, setCat] = useState('개발')
+  const [startedAt, setStartedAt] = useState<string | null>(null)
+  const [sessions, setSessions] = useState<FocusSession[]>([])
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
   const ref = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const cats = ['개발', '코딩 테스트', '학교 공부', '자격증', '독서', '기타']
-  const sessions = [
-    { start: '09:21', end: '10:13', cat: '개발', dur: '52분', mins: 52 },
-    { start: '16:10', end: '17:42', cat: '개발', dur: '1시간 32분', mins: 92 },
-    { start: '22:03', end: '22:41', cat: '코딩 테스트', dur: '38분', mins: 38 },
-  ]
-  const totalMins = sessions.reduce((a, s) => a + s.mins, 0) + Math.floor(secs / 60)
+  const totalMins = sessions.reduce((a, s) => a + s.duration_minutes, 0) + Math.floor(secs / 60)
+
+  useEffect(() => {
+    api.focusSessions(37).then(setSessions).catch((err) => setError(err.message))
+  }, [])
 
   useEffect(() => {
     if (running) ref.current = setInterval(() => setSecs(s => s + 1), 1000)
@@ -594,10 +659,44 @@ function FocusPage() {
   }, [running])
 
   const fmt = (s: number) => [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60].map(n => n.toString().padStart(2, '0')).join(':')
+  const toClock = (iso: string | null) => iso ? new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }) : '--:--'
+  const toggleTimer = async () => {
+    if (!running) {
+      setStartedAt(new Date().toISOString())
+      setSecs(0)
+      setRunning(true)
+      return
+    }
+
+    setRunning(false)
+    if (!startedAt || secs < 60) {
+      setSecs(0)
+      return
+    }
+
+    setSaving(true)
+    try {
+      const saved = await api.addFocusSession({
+        day_number: 37,
+        category: cat,
+        started_at: startedAt,
+        ended_at: new Date().toISOString(),
+        duration_minutes: Math.max(1, Math.round(secs / 60)),
+      })
+      setSessions((items) => [...items, saved])
+      setStartedAt(null)
+      setSecs(0)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '집중 세션 저장 실패')
+    } finally {
+      setSaving(false)
+    }
+  }
   const goalMins = 240
 
   return (
     <div style={{ padding: '40px 36px', maxWidth: 600, margin: '0 auto' }}>
+      {error && <div style={{ color: C.mintMuted, fontSize: 12, marginBottom: 16 }}>{error}</div>}
       {/* Big timer */}
       <div style={{ textAlign: 'center', marginBottom: 40 }}>
         <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.2em', marginBottom: 28 }}>집중 세션</div>
@@ -637,7 +736,7 @@ function FocusPage() {
           </div>
         )}
 
-        <button onClick={() => { setRunning(r => !r); if (running) setSecs(0) }} style={{
+        <button onClick={toggleTimer} disabled={saving} style={{
           padding: '13px 48px', borderRadius: 50, border: 'none', cursor: 'pointer',
           background: running ? 'transparent' : C.mint,
           color: running ? C.white : C.ink,
@@ -646,7 +745,7 @@ function FocusPage() {
           fontSize: 13, fontWeight: 700, letterSpacing: '0.06em',
           transition: 'all 120ms',
         }}>
-          {running ? '중지' : '집중 시작'}
+          {saving ? '저장 중...' : running ? '중지하고 저장' : '집중 시작'}
         </button>
       </div>
 
@@ -672,13 +771,13 @@ function FocusPage() {
           border: `1px solid ${C.border}`, marginBottom: 8,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ width: 3, height: 40, borderRadius: 2, background: s.cat === '개발' ? C.mint : C.mintMuted, marginRight: 10, alignSelf: 'center' }} />
+            <div style={{ width: 3, height: 40, borderRadius: 2, background: s.category === '개발' || s.category === 'Development' ? C.mint : C.mintMuted, marginRight: 10, alignSelf: 'center' }} />
             <div>
-              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.alt, marginBottom: 3 }}>{s.start} – {s.end}</div>
-              <div style={{ fontSize: 13, color: C.muted }}>{s.cat}</div>
+              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.alt, marginBottom: 3 }}>{toClock(s.started_at)} - {toClock(s.ended_at)}</div>
+              <div style={{ fontSize: 13, color: C.muted }}>{s.category.replace('Development', '개발').replace('Coding Test', '코딩 테스트')}</div>
             </div>
           </div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, color: C.mint, fontWeight: 600 }}>{s.dur}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, color: C.mint, fontWeight: 600 }}>{fmtMinutes(s.duration_minutes)}</div>
         </div>
       ))}
     </div>
@@ -690,17 +789,30 @@ function FocusPage() {
 ═══════════════════════════════════════════════ */
 function DevicesPage() {
   const [qr, setQr] = useState(false)
+  const [devices, setDevices] = useState<DeviceData[]>([])
+  const [error, setError] = useState('')
 
-  const connected = [
-    { name: '선우 노트북', sub: 'Windows 11', sync: '2분 전',  Illu: () => <IlluLaptop /> },
-    { name: 'Galaxy S25',    sub: 'Android 15', sync: '5분 전',  Illu: () => <IlluPhone  /> },
-    { name: 'Galaxy Watch 7',sub: 'Health Connect', sync: '12분 전', Illu: () => <IlluWatch /> },
-    { name: '@sunwoo_dev',   sub: '382 commits', sync: '1시간 전',    Illu: () => <IlluGit   /> },
-  ]
+  useEffect(() => {
+    api.devices().then(setDevices).catch((err) => setError(err.message))
+  }, [])
+
+  const illustration = (kind: string) => {
+    if (kind === 'phone') return () => <IlluPhone />
+    if (kind === 'watch') return () => <IlluWatch />
+    if (kind === 'github') return () => <IlluGit />
+    return () => <IlluLaptop />
+  }
+  const connected = devices.map((device) => ({
+    name: device.name,
+    sub: device.platform,
+    sync: shortTime(device.last_sync),
+    Illu: illustration(device.kind),
+  }))
 
   return (
     <div style={{ padding: '32px 36px' }}>
       <div style={{ fontSize: 32, fontWeight: 900, color: C.white, letterSpacing: '-0.02em', marginBottom: 28 }}>연결된 기기</div>
+      {error && <div style={{ color: C.mintMuted, fontSize: 12, marginBottom: 16 }}>{error}</div>}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14, marginBottom: 32 }}>
         {connected.map((d) => (
@@ -776,14 +888,46 @@ function CheckinPage({ setPage }: { setPage: (p: Page) => void }) {
   const [sat, setSat] = useState(0)
   const [note, setNote] = useState('')
   const [done, setDone] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
 
-  const save = () => { setDone(true); setTimeout(() => setPage('dashboard'), 1400) }
+  useEffect(() => {
+    api.checkin(37)
+      .then((checkin) => {
+        if (!checkin) return
+        setFocus(checkin.focus_score)
+        setSat(checkin.satisfaction_score)
+        setNote(checkin.note)
+        setDone(true)
+      })
+      .catch((err) => setError(err.message))
+  }, [])
+
+  const save = async () => {
+    setSaving(true)
+    setError('')
+    try {
+      await api.saveCheckin({
+        day_number: 37,
+        focus_score: focus,
+        satisfaction_score: sat,
+        note,
+      })
+      setDone(true)
+      setTimeout(() => setPage('dashboard'), 900)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '체크인 저장 실패')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <div style={{ padding: '40px 36px', maxWidth: 500 }}>
       <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.alt, letterSpacing: '0.15em', marginBottom: 6 }}>오늘 체크인</div>
       <div style={{ fontSize: 28, fontWeight: 900, color: C.white, marginBottom: 4, letterSpacing: '-0.02em' }}>37일차</div>
       <div style={{ fontSize: 11, color: C.alt, marginBottom: 40 }}>30초 안에 끝납니다.</div>
+      {error && <div style={{ color: C.mintMuted, fontSize: 12, marginBottom: 18 }}>{error}</div>}
 
       <ScoreInput label="오늘 얼마나 집중했나요?" value={focus} set={setFocus} color={C.mint} />
       <ScoreInput label="오늘 만족도는 어떤가요?" value={sat} set={setSat} color={C.mintMuted} />
@@ -801,15 +945,15 @@ function CheckinPage({ setPage }: { setPage: (p: Page) => void }) {
         />
       </div>
 
-      <button onClick={save} disabled={focus === 0 || sat === 0} style={{
-        width: '100%', padding: '15px', borderRadius: 50, border: 'none', cursor: focus && sat ? 'pointer' : 'not-allowed',
+      <button onClick={save} disabled={focus === 0 || sat === 0 || saving} style={{
+        width: '100%', padding: '15px', borderRadius: 50, border: 'none', cursor: focus && sat && !saving ? 'pointer' : 'not-allowed',
         background: done ? C.mintMuted : focus && sat ? C.mint : '#1e1e1e',
         color: done || (focus && sat) ? C.ink : C.alt,
         fontFamily: "'Pretendard', system-ui, sans-serif",
         fontSize: 13, fontWeight: 700, letterSpacing: '0.05em',
         transition: 'all 200ms',
       }}>
-        {done ? '✓  저장됨' : '오늘 저장'}
+        {saving ? '저장 중...' : done ? '✓  저장됨' : '오늘 저장'}
       </button>
     </div>
   )
@@ -843,24 +987,43 @@ function ScoreInput({ label, value, set, color }: { label: string; value: number
    RESULT PAGE
 ═══════════════════════════════════════════════ */
 function ResultPage() {
-  const bigStats = [
-    { label: '수면',      val: '642시간', color: C.mintMuted },
-    { label: 'PC',         val: '481시간', color: C.mint },
-    { label: '휴대폰',      val: '392시간', color: C.faint },
-    { label: '집중',      val: '247시간', color: C.mintBright },
-    { label: '개발',        val: '181시간', color: C.mint },
-    { label: '운동',   val: '41시간',  color: C.mintMuted },
-  ]
+  const [data, setData] = useState<ResultData | null>(null)
+  const [error, setError] = useState('')
 
-  const compare = [
-    { label: '휴대폰 사용량', d1: '6시간 21분', d100: '3시간 52분', delta: '↓ 39%', good: true },
-    { label: '집중 시간',  d1: '42분',    d100: '3시간 21분', delta: '↑ 379%', good: true },
-    { label: '개발 시간',    d1: '1시간 10분', d100: '4시간 31분', delta: '↑ 288%', good: true },
-    { label: '수면',       d1: '5시간 48분', d100: '7시간 12분', delta: '↑ 24%',  good: true },
-  ]
+  useEffect(() => {
+    api.result().then(setData).catch((err) => setError(err.message))
+  }, [])
 
   /* spark summary bars for result */
   const summaryData = [3,4,4,5,5,4,6,5,6,7,6,7,8,7,8,8,9,8,9,9,9,10,9,10,10,10,9,10,10,10,10,10,9,10,10,10,10]
+
+  if (error) return <ErrorBlock message={error} />
+  if (!data) return <LoadingBlock />
+
+  const totalHours = Math.round((data.totals.pc_minutes + data.totals.phone_minutes + data.totals.focus_minutes + data.totals.sleep_minutes + data.totals.exercise_minutes) / 60)
+  const bigStats = [
+    { label: '수면', val: `${Math.round(data.totals.sleep_minutes / 60)}시간`, color: C.mintMuted },
+    { label: 'PC', val: `${Math.round(data.totals.pc_minutes / 60)}시간`, color: C.mint },
+    { label: '휴대폰', val: `${Math.round(data.totals.phone_minutes / 60)}시간`, color: C.faint },
+    { label: '집중', val: `${Math.round(data.totals.focus_minutes / 60)}시간`, color: C.mintBright },
+    { label: '개발', val: `${Math.round(data.totals.development_minutes / 60)}시간`, color: C.mint },
+    { label: '운동', val: `${Math.round(data.totals.exercise_minutes / 60)}시간`, color: C.mintMuted },
+  ]
+  const pct = (first: number, last: number, invert = false) => {
+    const delta = first ? Math.round(((last - first) / first) * 100) : 0
+    const good = invert ? delta <= 0 : delta >= 0
+    return { delta: `${delta >= 0 ? '↑' : '↓'} ${Math.abs(delta)}%`, good }
+  }
+  const phone = pct(data.first.phone_minutes, data.last.phone_minutes, true)
+  const focus = pct(data.first.focus_minutes, data.last.focus_minutes)
+  const dev = pct(data.first.development_minutes, data.last.development_minutes)
+  const sleep = pct(data.first.sleep_minutes, data.last.sleep_minutes)
+  const compare = [
+    { label: '휴대폰 사용량', d1: fmtMinutes(data.first.phone_minutes), d100: fmtMinutes(data.last.phone_minutes), ...phone },
+    { label: '집중 시간', d1: fmtMinutes(data.first.focus_minutes), d100: fmtMinutes(data.last.focus_minutes), ...focus },
+    { label: '개발 시간', d1: fmtMinutes(data.first.development_minutes), d100: fmtMinutes(data.last.development_minutes), ...dev },
+    { label: '수면', d1: fmtMinutes(data.first.sleep_minutes), d100: fmtMinutes(data.last.sleep_minutes), ...sleep },
+  ]
 
   return (
     <div style={{ padding: '48px 40px' }}>
@@ -870,7 +1033,7 @@ function ResultPage() {
         <div style={{ fontSize: 88, fontWeight: 900, color: C.white, letterSpacing: '-0.04em', lineHeight: 0.9, marginBottom: 16 }}>완료</div>
         <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, color: C.mint, marginBottom: 48 }}>100 / 100</div>
 
-        <div style={{ fontSize: 60, fontWeight: 900, color: C.white, letterSpacing: '-0.03em', lineHeight: 1 }}>2,400</div>
+        <div style={{ fontSize: 60, fontWeight: 900, color: C.white, letterSpacing: '-0.03em', lineHeight: 1 }}>{totalHours.toLocaleString()}</div>
         <div style={{ fontSize: 14, fontWeight: 900, color: C.white, letterSpacing: '0.1em', marginBottom: 4 }}>시간</div>
         <div style={{ fontSize: 11, color: C.alt }}>삶의 100일을 기록했습니다</div>
 
@@ -893,11 +1056,11 @@ function ResultPage() {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 40 }}>
         <div style={{ background: C.raised, borderRadius: 14, padding: '20px 24px', border: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontSize: 11, color: C.alt }}>총 걸음 수</span>
-          <span style={{ fontSize: 28, fontWeight: 900, color: C.white, letterSpacing: '-0.02em' }}>1,043,291</span>
+          <span style={{ fontSize: 28, fontWeight: 900, color: C.white, letterSpacing: '-0.02em' }}>{data.totals.steps.toLocaleString()}</span>
         </div>
         <div style={{ background: C.raised, borderRadius: 14, padding: '20px 24px', border: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontSize: 11, color: C.alt }}>GitHub 커밋</span>
-          <span style={{ fontSize: 28, fontWeight: 900, color: C.mint, letterSpacing: '-0.02em' }}>382</span>
+          <span style={{ fontSize: 28, fontWeight: 900, color: C.mint, letterSpacing: '-0.02em' }}>{data.totals.github_commits.toLocaleString()}</span>
         </div>
       </div>
 
