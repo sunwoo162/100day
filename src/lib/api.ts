@@ -2,6 +2,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
+    credentials: 'include',
     ...options,
     headers: { 'Content-Type': 'application/json', ...(options?.headers || {}) },
   })
@@ -10,6 +11,8 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  me: () => request<{ user: null | { id: number; email: string | null; name: string; avatarUrl: string | null } }>('/auth/me'),
+  logout: () => fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' }),
   health: () => request<{ ok: boolean; database: string }>('/health'),
   challenge: () => request('/challenge'),
   dashboard: (day = 37) => request(`/dashboard/today?day=${day}`),

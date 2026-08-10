@@ -1,6 +1,8 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, type CSSProperties } from 'react'
+import { api } from './lib/api'
 
 type Page = 'dashboard' | 'timeline' | 'analytics' | 'focus' | 'devices' | 'checkin' | 'result'
+type AuthUser = { id: number; email: string | null; name: string; avatarUrl: string | null }
 
 /* ── colour tokens ── */
 const C = {
@@ -32,9 +34,35 @@ const NAV: { id: Page; label: string; Icon: (p: { active: boolean }) => React.Re
 export default function App() {
   const [page, setPage] = useState<Page>('dashboard')
   const [menuOpen, setMenuOpen] = useState(false)
+  const [user, setUser] = useState<AuthUser | null>(null)
+  const [authLoading, setAuthLoading] = useState(true)
+
+  useEffect(() => {
+    api.me()
+      .then((res) => setUser(res.user))
+      .catch(() => setUser(null))
+      .finally(() => setAuthLoading(false))
+  }, [])
+
+  const logout = async () => {
+    await api.logout()
+    setUser(null)
+    setPage('dashboard')
+  }
+
+  if (authLoading) {
+    return (
+      <div style={{ minHeight: '100vh', background: C.canvas, color: C.muted, display: 'grid', placeItems: 'center', fontFamily: "'Pretendard', system-ui, sans-serif" }}>
+        로그인 상태 확인 중...
+      </div>
+    )
+  }
+
+  if (!user) return <LoginPage />
+
   return (
     <div style={{ display: 'flex', height: '100vh', background: C.canvas, overflow: 'hidden', fontFamily: "'Pretendard', system-ui, sans-serif" }}>
-      <Sidebar page={page} setPage={setPage} open={menuOpen} setOpen={setMenuOpen} />
+      <Sidebar page={page} setPage={setPage} open={menuOpen} setOpen={setMenuOpen} user={user} onLogout={logout} />
       <main style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }} className="scrollbar-none">
         <MobileTopbar page={page} onMenu={() => setMenuOpen(true)} />
         {page === 'dashboard' && <DashboardPage setPage={setPage} />}
@@ -50,10 +78,56 @@ export default function App() {
   )
 }
 
+function LoginPage() {
+  const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
+  const login = (provider: 'google' | 'github') => {
+    window.location.href = `${apiBase}/auth/${provider}`
+  }
+
+  return (
+    <div style={{ minHeight: '100vh', background: C.canvas, color: C.white, display: 'grid', placeItems: 'center', fontFamily: "'Pretendard', system-ui, sans-serif", padding: 24 }}>
+      <div style={{ width: '100%', maxWidth: 380 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 34 }}>
+          <LogoMark />
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 900, letterSpacing: '0.08em' }}>100 DAYS</div>
+            <div style={{ fontSize: 12, color: C.alt, marginTop: 2 }}>내 기록을 안전하게 저장하세요</div>
+          </div>
+        </div>
+        <div style={{ background: C.raised, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24 }}>
+          <div style={{ fontSize: 24, fontWeight: 900, marginBottom: 8, letterSpacing: '-0.02em' }}>로그인</div>
+          <div style={{ fontSize: 13, color: C.alt, lineHeight: 1.7, marginBottom: 24 }}>
+            Google 또는 GitHub 계정으로 시작하면 100일 기록이 계정별로 저장됩니다.
+          </div>
+          <button onClick={() => login('google')} style={loginButtonStyle}>
+            Google로 계속하기
+          </button>
+          <button onClick={() => login('github')} style={{ ...loginButtonStyle, marginTop: 10 }}>
+            GitHub로 계속하기
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const loginButtonStyle: CSSProperties = {
+  width: '100%',
+  padding: '13px 16px',
+  borderRadius: 8,
+  border: `1px solid ${C.border2}`,
+  background: C.surface,
+  color: C.white,
+  cursor: 'pointer',
+  fontFamily: "'Pretendard', system-ui, sans-serif",
+  fontSize: 13,
+  fontWeight: 700,
+}
+
 /* ═══════════════════════════════════════════════
    SIDEBAR
 ═══════════════════════════════════════════════ */
-function Sidebar({ page, setPage, open, setOpen }: { page: Page; setPage: (p: Page) => void; open: boolean; setOpen: (v: boolean) => void }) {
+function Sidebar({ page, setPage, open, setOpen, user, onLogout }: { page: Page; setPage: (p: Page) => void; open: boolean; setOpen: (v: boolean) => void; user: AuthUser; onLogout: () => void }) {
   return (
     <aside data-open={open} style={{
       width: 210, minWidth: 210, background: C.surface,
@@ -87,6 +161,17 @@ function Sidebar({ page, setPage, open, setOpen }: { page: Page; setPage: (p: Pa
 
       {/* Bottom */}
       <div style={{ padding: '10px 10px 24px', borderTop: `1px solid ${C.border}` }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '8px 12px 14px' }}>
+          {user.avatarUrl ? (
+            <img src={user.avatarUrl} alt="" style={{ width: 24, height: 24, borderRadius: '50%', objectFit: 'cover' }} />
+          ) : (
+            <div style={{ width: 24, height: 24, borderRadius: '50%', background: C.chip, color: C.mint, display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 800 }}>{user.name[0]}</div>
+          )}
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 11, color: C.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.name}</div>
+            <button onClick={onLogout} style={{ marginTop: 2, padding: 0, border: 'none', background: 'transparent', color: C.alt, fontSize: 10, cursor: 'pointer', fontFamily: "'Pretendard', system-ui, sans-serif" }}>로그아웃</button>
+          </div>
+        </div>
         <NavBtn active={page === 'checkin'} onClick={() => { setPage('checkin'); setOpen(false) }}>
           <IcoCheck c={page === 'checkin' ? C.mint : '#4a4a4a'} />
           <span>오늘 체크인</span>

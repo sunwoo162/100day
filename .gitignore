@@ -3,6 +3,7 @@ dist/
 build/
 .cache/
 .env*
+!.env.example
 .vite/
 vite.config.*.timestamp-*
 *.tsbuildinfo
@@ -15,4 +16,3 @@ logs/
 server/data/*.db
 server/data/*.db-*
 !server/data/.gitkeep
-

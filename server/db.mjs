@@ -18,8 +18,36 @@ CREATE TABLE IF NOT EXISTS challenges (
   start_date TEXT NOT NULL,
   target_days INTEGER NOT NULL DEFAULT 100
 );
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  email TEXT UNIQUE,
+  name TEXT NOT NULL,
+  avatar_url TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS oauth_accounts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  provider TEXT NOT NULL,
+  provider_user_id TEXT NOT NULL,
+  email TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(provider, provider_user_id),
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS sessions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  token TEXT NOT NULL UNIQUE,
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+);
 CREATE TABLE IF NOT EXISTS daily_metrics (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER,
   challenge_id INTEGER NOT NULL,
   day_number INTEGER NOT NULL,
   date TEXT NOT NULL,
@@ -31,49 +59,74 @@ CREATE TABLE IF NOT EXISTS daily_metrics (
   exercise_minutes INTEGER NOT NULL DEFAULT 0,
   development_minutes INTEGER NOT NULL DEFAULT 0,
   github_commits INTEGER NOT NULL DEFAULT 0,
+  UNIQUE(user_id, challenge_id, day_number),
   UNIQUE(challenge_id, day_number),
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY(challenge_id) REFERENCES challenges(id)
 );
 CREATE TABLE IF NOT EXISTS app_usage (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER,
   day_number INTEGER NOT NULL,
   source TEXT NOT NULL,
   app_name TEXT NOT NULL,
-  minutes INTEGER NOT NULL DEFAULT 0
+  minutes INTEGER NOT NULL DEFAULT 0,
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS timeline_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER,
   day_number INTEGER NOT NULL,
   time TEXT NOT NULL,
   label TEXT NOT NULL,
-  type TEXT NOT NULL
+  type TEXT NOT NULL,
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS devices (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER,
   kind TEXT NOT NULL,
   name TEXT NOT NULL,
   platform TEXT NOT NULL,
   status TEXT NOT NULL,
   last_sync TEXT,
-  source TEXT
+  source TEXT,
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS focus_sessions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER,
   day_number INTEGER NOT NULL,
   category TEXT NOT NULL,
   started_at TEXT NOT NULL,
   ended_at TEXT,
-  duration_minutes INTEGER NOT NULL DEFAULT 0
+  duration_minutes INTEGER NOT NULL DEFAULT 0,
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS checkins (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  day_number INTEGER NOT NULL UNIQUE,
+  user_id INTEGER,
+  day_number INTEGER NOT NULL,
   focus_score INTEGER NOT NULL,
   satisfaction_score INTEGER NOT NULL,
   note TEXT NOT NULL DEFAULT '',
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  UNIQUE(user_id, day_number),
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 `)
+
+for (const [table, definition] of [
+  ['daily_metrics', 'user_id INTEGER'],
+  ['app_usage', 'user_id INTEGER'],
+  ['timeline_events', 'user_id INTEGER'],
+  ['devices', 'user_id INTEGER'],
+  ['focus_sessions', 'user_id INTEGER'],
+  ['checkins', 'user_id INTEGER'],
+]) {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all().map(column => column.name)
+  if (!columns.includes('user_id')) db.exec(`ALTER TABLE ${table} ADD COLUMN ${definition}`)
+}
 
 export function isSeeded() {
   return db.prepare('SELECT COUNT(*) AS count FROM daily_metrics').get().count > 0

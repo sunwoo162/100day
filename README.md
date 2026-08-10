@@ -44,6 +44,30 @@ npm run dev
 - API: http://localhost:4000
 - API 상태 확인: http://localhost:4000/api/health
 
+## 로그인 설정
+
+사용자별 기록 저장을 위해 Google 또는 GitHub OAuth 로그인이 필요합니다.
+
+`.env.example`을 참고해 환경변수를 설정합니다.
+
+```bash
+WEB_ORIGIN=http://localhost:5173
+API_ORIGIN=http://localhost:4000
+
+GITHUB_CLIENT_ID=...
+GITHUB_CLIENT_SECRET=...
+
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+```
+
+OAuth 앱의 callback URL은 아래처럼 등록합니다.
+
+```text
+GitHub: http://localhost:4000/api/auth/github/callback
+Google: http://localhost:4000/api/auth/google/callback
+```
+
 ## DB / Mock Data
 
 `npm run dev` 또는 `npm run dev:api`를 처음 실행하면 `server/data/100days.db`가 자동 생성됩니다.
@@ -73,6 +97,12 @@ npm run db:reset
 
 ```text
 GET  /api/health
+GET  /api/auth/me
+GET  /api/auth/github
+GET  /api/auth/github/callback
+GET  /api/auth/google
+GET  /api/auth/google/callback
+POST /api/auth/logout
 GET  /api/challenge
 GET  /api/dashboard/today?day=37
 GET  /api/timeline
