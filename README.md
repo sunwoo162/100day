@@ -1,11 +1,11 @@
-# 100 DAYS
+# 나의백일
 
-100일 동안 노트북, 휴대폰, 워치, GitHub 등의 활동 데이터를 한 곳에 모아 확인하는 개인 라이프로그 대시보드입니다.
+100일 동안 노트북, 휴대폰, GitHub 등의 활동 데이터를 한 곳에 모아 확인하는 개인 라이프로그 대시보드입니다.
 
 ## 권장 폴더 위치 (Windows)
 
 ```text
-C:\Users\user\Documents\100-days-dashboard
+C:\Users\user\Documents\100day
 ```
 
 다운로드한 압축을 위 경로에 풀어서 사용하면 됩니다.
@@ -13,7 +13,7 @@ C:\Users\user\Documents\100-days-dashboard
 ## 현재 구성
 
 ```text
-100-days-dashboard/
+100day/
 ├─ src/                  # React 프론트엔드
 ├─ server/
 │  ├─ index.mjs          # Node API 서버
@@ -32,7 +32,7 @@ C:\Users\user\Documents\100-days-dashboard
 Node.js 22.5 이상을 권장합니다. (`node:sqlite` 사용)
 
 ```bash
-cd C:\Users\user\Documents\100-days-dashboard
+cd C:\Users\user\Documents\100day
 npm install
 npm run dev
 ```

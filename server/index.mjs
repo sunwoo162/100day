@@ -55,7 +55,7 @@ function getUserChallenge(userId) {
   let challenge = db.prepare('SELECT * FROM challenges WHERE user_id = ?').get(userId)
   if (challenge) return challenge
   const result = db.prepare('INSERT INTO challenges (user_id, name, start_date, target_days) VALUES (?, ?, ?, 100)')
-    .run(userId, '100 DAYS', process.env.CHALLENGE_START_DATE || todayKst())
+    .run(userId, '나의백일', process.env.CHALLENGE_START_DATE || todayKst())
   return db.prepare('SELECT * FROM challenges WHERE id = ?').get(Number(result.lastInsertRowid))
 }
 function currentDay(challenge) {
@@ -172,12 +172,12 @@ async function exchangeCode(provider, code) {
 }
 async function fetchOAuthProfile(provider, accessToken) {
   if (provider === 'github') {
-    const userRes = await fetch('https://api.github.com/user', { headers: { Authorization: `Bearer ${accessToken}`, 'User-Agent': '100-days-dashboard' } })
+    const userRes = await fetch('https://api.github.com/user', { headers: { Authorization: `Bearer ${accessToken}`, 'User-Agent': 'nayibaegil' } })
     if (!userRes.ok) throw new Error(`GitHub 프로필 요청 실패: ${userRes.status}`)
     const profile = await userRes.json()
     let email = profile.email
     if (!email) {
-      const emailRes = await fetch('https://api.github.com/user/emails', { headers: { Authorization: `Bearer ${accessToken}`, 'User-Agent': '100-days-dashboard' } })
+      const emailRes = await fetch('https://api.github.com/user/emails', { headers: { Authorization: `Bearer ${accessToken}`, 'User-Agent': 'nayibaegil' } })
       if (emailRes.ok) {
         const emails = await emailRes.json()
         email = emails.find(item => item.primary && item.verified)?.email || emails.find(item => item.verified)?.email
@@ -408,7 +408,7 @@ const server = http.createServer(async (req, res) => {
 })
 
 server.listen(PORT, () => {
-  console.log(`100 DAYS API 실행 중: http://localhost:${PORT}`)
+  console.log(`나의백일 API 실행 중: http://localhost:${PORT}`)
   console.log(`SQLite DB: ${dbPath}`)
 })
 

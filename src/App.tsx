@@ -80,7 +80,7 @@ function LoginPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 30 }}>
           <LogoMark />
           <div>
-            <div style={{ fontSize: 15, fontWeight: 900, color: C.white, letterSpacing: '0.08em' }}>100 DAYS</div>
+            <div style={{ fontSize: 15, fontWeight: 900, color: C.white, letterSpacing: '0.08em' }}>나의백일</div>
             <div style={{ fontSize: 12, color: C.alt, marginTop: 3 }}>내 기록을 안전하게 저장하세요</div>
           </div>
         </div>
@@ -159,7 +159,7 @@ function Sidebar({ page, setPage, open, setOpen, currentDay, user, onLogout }: {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <LogoMark />
           <div>
-            <div style={{ fontSize: 13, fontWeight: 900, color: C.white, letterSpacing: '0.08em' }}>100 DAYS</div>
+            <div style={{ fontSize: 13, fontWeight: 900, color: C.white, letterSpacing: '0.08em' }}>나의백일</div>
             <div style={{ fontSize: 10, color: C.alt, fontFamily: "'JetBrains Mono', monospace", marginTop: 1 }}>{currentDay}일차 / 100</div>
           </div>
         </div>
@@ -195,7 +195,7 @@ function Sidebar({ page, setPage, open, setOpen, currentDay, user, onLogout }: {
         </div>
         <NavBtn active={page === 'result'} onClick={() => { setPage('result'); setOpen(false) }}>
           <IcoTrophy c={page === 'result' ? C.mint : '#4a4a4a'} />
-          <span>100일 결과</span>
+          <span>백일 결과</span>
         </NavBtn>
       </div>
     </aside>
@@ -219,7 +219,7 @@ function NavBtn({ active, onClick, children }: { active: boolean; onClick: () =>
 }
 
 function MobileTopbar({ page, onMenu }: { page: Page; onMenu: () => void }) {
-  const titles: Record<Page, string> = { dashboard: '개요', timeline: '타임라인', analytics: '분석', focus: '공부', devices: '기기', result: '100일 결과' }
+  const titles: Record<Page, string> = { dashboard: '개요', timeline: '타임라인', analytics: '분석', focus: '공부', devices: '기기', result: '백일 결과' }
   return (
     <div className="mobile-header" style={{ display: 'none', padding: '14px 20px', borderBottom: `1px solid ${C.border}`, background: C.surface, alignItems: 'center', gap: 12 }}>
       <button onClick={onMenu} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}><IcoMenu c={C.muted} /></button>
@@ -429,7 +429,7 @@ function TimelinePage({ currentDay }: { currentDay: number }) {
   return (
     <div style={{ padding: '32px 36px' }}>
       <div style={{ marginBottom: 28 }}>
-        <div style={{ fontSize: 44, fontWeight: 900, color: C.white, letterSpacing: '-0.03em', lineHeight: 1 }}>100 DAYS</div>
+        <div style={{ fontSize: 44, fontWeight: 900, color: C.white, letterSpacing: '-0.03em', lineHeight: 1 }}>나의백일</div>
         <div style={{ display: 'flex', gap: 20, marginTop: 8 }}>
           <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: C.mint }}>{completedDays}일 완료</span>
           <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: C.alt }}>{100 - completedDays}일 남음</span>
@@ -1068,7 +1068,7 @@ function ResultPage() {
     <div style={{ padding: '48px 40px' }}>
       {/* Hero */}
       <div style={{ textAlign: 'center', marginBottom: 64 }}>
-        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.alt, letterSpacing: '0.3em', marginBottom: 16 }}>100 DAYS</div>
+        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.alt, letterSpacing: '0.3em', marginBottom: 16 }}>나의백일</div>
         <div style={{ fontSize: 88, fontWeight: 900, color: C.white, letterSpacing: '-0.04em', lineHeight: 0.9, marginBottom: 16 }}>완료</div>
         <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, color: C.mint, marginBottom: 48 }}>100 / 100</div>
 
