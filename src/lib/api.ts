@@ -16,6 +16,16 @@ export type DashboardData = {
   events: { time: string; label: string; type: string }[]
 }
 
+export type ChallengeData = {
+  id: number
+  name: string
+  start_date: string
+  target_days: number
+  currentDay: number
+  completedDays: number
+  remainingDays: number
+}
+
 export type TimelineEntry = {
   day_number: number
   date: string
@@ -98,7 +108,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 export const api = {
   health: () => request<{ ok: boolean; database: string }>('/health'),
-  challenge: () => request('/challenge'),
+  challenge: () => request<ChallengeData>('/challenge'),
   dashboard: (day = 37) => request<DashboardData>(`/dashboard/today?day=${day}`),
   timeline: () => request<TimelineEntry[]>('/timeline'),
   analytics: (days = 30) => request<AnalyticsData>(`/analytics?days=${days}`),

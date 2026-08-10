@@ -1,9 +1,7 @@
 import http from 'node:http'
 import { URL } from 'node:url'
 import { db, dbPath } from './db.mjs'
-import { seed } from './seed.mjs'
 
-seed()
 const PORT = Number(process.env.API_PORT || 4000)
 
 function json(res, status, data) {
@@ -22,8 +20,58 @@ function readBody(req) {
     req.on('end', () => { try { resolve(data ? JSON.parse(data) : {}) } catch (e) { reject(e) } })
   })
 }
+function todayKst() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date())
+}
+function daysBetween(start, end) {
+  const startDate = new Date(`${start}T00:00:00+09:00`)
+  const endDate = new Date(`${end}T00:00:00+09:00`)
+  return Math.floor((endDate.getTime() - startDate.getTime()) / 86400000)
+}
+function getChallenge() {
+  return db.prepare('SELECT * FROM challenges WHERE id = 1').get()
+}
+function currentDay(challenge = getChallenge()) {
+  return Math.max(1, Math.min(challenge.target_days, daysBetween(challenge.start_date, todayKst()) + 1))
+}
+function requestedDay(url) {
+  const challenge = getChallenge()
+  const day = Number(url.searchParams.get('day') || currentDay(challenge))
+  return Math.max(1, Math.min(challenge.target_days, Number.isFinite(day) ? day : currentDay(challenge)))
+}
 function formatMinutes(min) { return `${Math.floor(min/60)}h ${String(min%60).padStart(2,'0')}m` }
-function getMetric(day=37) { return db.prepare('SELECT * FROM daily_metrics WHERE day_number = ?').get(day) }
+function emptyMetric(day, challenge = getChallenge()) {
+  const date = new Date(`${challenge.start_date}T00:00:00+09:00`)
+  date.setDate(date.getDate() + day - 1)
+  return {
+    day_number: day,
+    date: new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date),
+    pc_minutes: 0,
+    phone_minutes: 0,
+    focus_minutes: 0,
+    sleep_minutes: 0,
+    steps: 0,
+    exercise_minutes: 0,
+    development_minutes: 0,
+    github_commits: 0,
+  }
+}
+function getMetric(day) { return db.prepare('SELECT * FROM daily_metrics WHERE day_number = ?').get(day) || emptyMetric(day) }
+function ensureMetric(day) {
+  const existing = db.prepare('SELECT * FROM daily_metrics WHERE day_number = ?').get(day)
+  if (existing) return existing
+  const challenge = getChallenge()
+  const metric = emptyMetric(day, challenge)
+  db.prepare(`INSERT INTO daily_metrics
+    (challenge_id, day_number, date, pc_minutes, phone_minutes, focus_minutes, sleep_minutes, steps, exercise_minutes, development_minutes, github_commits)
+    VALUES (?, ?, ?, 0, 0, 0, 0, 0, 0, 0, 0)`).run(challenge.id, day, metric.date)
+  return db.prepare('SELECT * FROM daily_metrics WHERE day_number = ?').get(day)
+}
 
 const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') return json(res, 204, {})
@@ -32,12 +80,14 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/health') return json(res, 200, { ok: true, database: dbPath })
 
     if (url.pathname === '/api/challenge') {
-      const challenge = db.prepare('SELECT * FROM challenges WHERE id = 1').get()
-      return json(res, 200, { ...challenge, currentDay: 37, completedDays: 37, remainingDays: 63 })
+      const challenge = getChallenge()
+      const day = currentDay(challenge)
+      const completedDays = db.prepare('SELECT COUNT(DISTINCT day_number) AS count FROM daily_metrics').get().count
+      return json(res, 200, { ...challenge, currentDay: day, completedDays, remainingDays: Math.max(0, challenge.target_days - day) })
     }
 
     if (url.pathname === '/api/dashboard/today') {
-      const day = Number(url.searchParams.get('day') || 37)
+      const day = requestedDay(url)
       const metric = getMetric(day)
       const prev = getMetric(Math.max(1, day - 1))
       const apps = db.prepare('SELECT app_name AS name, source, minutes FROM app_usage WHERE day_number = ? ORDER BY minutes DESC LIMIT 8').all(day)
@@ -66,10 +116,11 @@ const server = http.createServer(async (req, res) => {
 
     if (url.pathname === '/api/analytics') {
       const days = Math.max(1, Math.min(100, Number(url.searchParams.get('days') || 30)))
-      const rows = db.prepare('SELECT * FROM daily_metrics WHERE day_number <= 37 ORDER BY day_number DESC LIMIT ?').all(days).reverse()
+      const day = currentDay()
+      const rows = db.prepare('SELECT * FROM daily_metrics WHERE day_number <= ? ORDER BY day_number DESC LIMIT ?').all(day, days).reverse()
       const topApps = db.prepare(`SELECT app_name AS name, SUM(minutes) AS minutes FROM app_usage WHERE day_number IN (
-          SELECT day_number FROM daily_metrics WHERE day_number <= 37 ORDER BY day_number DESC LIMIT ?
-        ) GROUP BY app_name ORDER BY minutes DESC LIMIT 8`).all(days)
+          SELECT day_number FROM daily_metrics WHERE day_number <= ? ORDER BY day_number DESC LIMIT ?
+        ) GROUP BY app_name ORDER BY minutes DESC LIMIT 8`).all(day, days)
       return json(res, 200, { days, rows, topApps })
     }
 
@@ -91,13 +142,13 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (url.pathname === '/api/focus/sessions' && req.method === 'GET') {
-      const day = Number(url.searchParams.get('day') || 37)
+      const day = requestedDay(url)
       return json(res, 200, db.prepare('SELECT * FROM focus_sessions WHERE day_number = ? ORDER BY started_at').all(day))
     }
 
     if (url.pathname === '/api/focus/sessions' && req.method === 'POST') {
       const body = await readBody(req)
-      const day = Number(body.day_number || 37)
+      const day = Number(body.day_number || currentDay())
       const category = String(body.category || '기타')
       const note = String(body.note || '')
       const started = body.started_at || new Date().toISOString()
@@ -105,17 +156,19 @@ const server = http.createServer(async (req, res) => {
       const duration = Number(body.duration_minutes || 0)
       db.prepare('INSERT OR IGNORE INTO study_categories (name, created_at) VALUES (?, ?)').run(category, new Date().toISOString())
       const result = db.prepare('INSERT INTO focus_sessions (day_number, category, note, started_at, ended_at, duration_minutes) VALUES (?, ?, ?, ?, ?, ?)').run(day, category, note, started, ended, duration)
+      ensureMetric(day)
+      db.prepare('UPDATE daily_metrics SET focus_minutes = focus_minutes + ? WHERE day_number = ?').run(duration, day)
       return json(res, 201, { id: Number(result.lastInsertRowid), day_number: day, category, note, started_at: started, ended_at: ended, duration_minutes: duration })
     }
 
     if (url.pathname === '/api/checkins' && req.method === 'GET') {
-      const day = Number(url.searchParams.get('day') || 37)
+      const day = requestedDay(url)
       return json(res, 200, db.prepare('SELECT * FROM checkins WHERE day_number = ?').get(day) || null)
     }
 
     if (url.pathname === '/api/checkins' && req.method === 'POST') {
       const body = await readBody(req)
-      const day = Number(body.day_number || 37)
+      const day = Number(body.day_number || currentDay())
       const focus = Math.max(1, Math.min(10, Number(body.focus_score || 5)))
       const satisfaction = Math.max(1, Math.min(10, Number(body.satisfaction_score || 5)))
       const note = String(body.note || '')
@@ -127,11 +180,11 @@ const server = http.createServer(async (req, res) => {
 
     if (url.pathname === '/api/result') {
       const totals = db.prepare(`SELECT
-        SUM(pc_minutes) pc_minutes, SUM(phone_minutes) phone_minutes, SUM(focus_minutes) focus_minutes,
-        SUM(sleep_minutes) sleep_minutes, SUM(steps) steps, SUM(exercise_minutes) exercise_minutes,
-        SUM(development_minutes) development_minutes, SUM(github_commits) github_commits
+        COALESCE(SUM(pc_minutes), 0) pc_minutes, COALESCE(SUM(phone_minutes), 0) phone_minutes, COALESCE(SUM(focus_minutes), 0) focus_minutes,
+        COALESCE(SUM(sleep_minutes), 0) sleep_minutes, COALESCE(SUM(steps), 0) steps, COALESCE(SUM(exercise_minutes), 0) exercise_minutes,
+        COALESCE(SUM(development_minutes), 0) development_minutes, COALESCE(SUM(github_commits), 0) github_commits
         FROM daily_metrics`).get()
-      const first = getMetric(1), last = getMetric(100)
+      const first = getMetric(1), last = getMetric(currentDay())
       return json(res, 200, { totals, first, last })
     }
 

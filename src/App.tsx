@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { api, type AnalyticsData, type DashboardData, type DeviceData, type FocusSession, type ResultData, type StudyCategory, type TimelineEntry } from './lib/api'
+import { api, type AnalyticsData, type ChallengeData, type DashboardData, type DeviceData, type FocusSession, type ResultData, type StudyCategory, type TimelineEntry } from './lib/api'
 
 type Page = 'dashboard' | 'timeline' | 'analytics' | 'focus' | 'devices' | 'checkin' | 'result'
 
@@ -72,17 +72,24 @@ function ErrorBlock({ message }: { message: string }) {
 export default function App() {
   const [page, setPage] = useState<Page>('dashboard')
   const [menuOpen, setMenuOpen] = useState(false)
+  const [challenge, setChallenge] = useState<ChallengeData | null>(null)
+
+  useEffect(() => {
+    api.challenge().then(setChallenge).catch(() => setChallenge(null))
+  }, [])
+
+  const currentDay = challenge?.currentDay ?? 1
   return (
     <div style={{ display: 'flex', height: '100vh', background: C.canvas, overflow: 'hidden', fontFamily: "'Pretendard', system-ui, sans-serif" }}>
-      <Sidebar page={page} setPage={setPage} open={menuOpen} setOpen={setMenuOpen} />
+      <Sidebar page={page} setPage={setPage} open={menuOpen} setOpen={setMenuOpen} currentDay={currentDay} />
       <main style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }} className="scrollbar-none">
         <MobileTopbar page={page} onMenu={() => setMenuOpen(true)} />
-        {page === 'dashboard' && <DashboardPage setPage={setPage} />}
-        {page === 'timeline'  && <TimelinePage />}
+        {page === 'dashboard' && <DashboardPage setPage={setPage} currentDay={currentDay} />}
+        {page === 'timeline'  && <TimelinePage currentDay={currentDay} />}
         {page === 'analytics' && <AnalyticsPage />}
-        {page === 'focus'     && <FocusPage />}
+        {page === 'focus'     && <FocusPage currentDay={currentDay} />}
         {page === 'devices'   && <DevicesPage />}
-        {page === 'checkin'   && <CheckinPage setPage={setPage} />}
+        {page === 'checkin'   && <CheckinPage setPage={setPage} currentDay={currentDay} />}
         {page === 'result'    && <ResultPage />}
       </main>
       {menuOpen && <div onClick={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', zIndex: 39 }} />}
@@ -93,7 +100,7 @@ export default function App() {
 /* ═══════════════════════════════════════════════
    SIDEBAR
 ═══════════════════════════════════════════════ */
-function Sidebar({ page, setPage, open, setOpen }: { page: Page; setPage: (p: Page) => void; open: boolean; setOpen: (v: boolean) => void }) {
+function Sidebar({ page, setPage, open, setOpen, currentDay }: { page: Page; setPage: (p: Page) => void; open: boolean; setOpen: (v: boolean) => void; currentDay: number }) {
   return (
     <aside data-open={open} style={{
       width: 210, minWidth: 210, background: C.surface,
@@ -106,12 +113,12 @@ function Sidebar({ page, setPage, open, setOpen }: { page: Page; setPage: (p: Pa
           <LogoMark />
           <div>
             <div style={{ fontSize: 13, fontWeight: 900, color: C.white, letterSpacing: '0.08em' }}>100 DAYS</div>
-            <div style={{ fontSize: 10, color: C.alt, fontFamily: "'JetBrains Mono', monospace", marginTop: 1 }}>37일차 / 100</div>
+            <div style={{ fontSize: 10, color: C.alt, fontFamily: "'JetBrains Mono', monospace", marginTop: 1 }}>{currentDay}일차 / 100</div>
           </div>
         </div>
         {/* mini progress */}
         <div style={{ marginTop: 14, height: 2, background: C.border2, borderRadius: 1 }}>
-          <div style={{ width: '37%', height: '100%', background: C.mint, borderRadius: 1 }} />
+          <div style={{ width: `${currentDay}%`, height: '100%', background: C.mint, borderRadius: 1 }} />
         </div>
       </div>
 
@@ -169,13 +176,13 @@ function MobileTopbar({ page, onMenu }: { page: Page; onMenu: () => void }) {
 /* ═══════════════════════════════════════════════
    DASHBOARD
 ═══════════════════════════════════════════════ */
-function DashboardPage({ setPage }: { setPage: (p: Page) => void }) {
+function DashboardPage({ setPage, currentDay }: { setPage: (p: Page) => void; currentDay: number }) {
   const [data, setData] = useState<DashboardData | null>(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    api.dashboard(37).then(setData).catch((err) => setError(err.message))
-  }, [])
+    api.dashboard(currentDay).then(setData).catch((err) => setError(err.message))
+  }, [currentDay])
 
   const spark7 = [4.1, 5.2, 6.3, 5.8, 7.1, 6.4, 6.2]
   const spark7b = [5.3, 4.8, 5.6, 6.1, 4.9, 5.0, 4.1]
@@ -228,21 +235,21 @@ function DashboardPage({ setPage }: { setPage: (p: Page) => void }) {
       {/* Header */}
       <div style={{ marginBottom: 36 }}>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 12 }}>
-          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.alt, letterSpacing: '0.12em' }}>2025.03.09 · 일</span>
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.alt, letterSpacing: '0.12em' }}>{data.date}</span>
           <span style={{ width: 3, height: 3, borderRadius: '50%', background: C.border2, display: 'inline-block' }} />
-          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.faint }}>100일 중 37일차</span>
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.faint }}>100일 중 {data.day}일차</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 68, fontWeight: 900, color: C.white, lineHeight: 1, letterSpacing: '-0.03em' }}>37일차</span>
+          <span style={{ fontSize: 68, fontWeight: 900, color: C.white, lineHeight: 1, letterSpacing: '-0.03em' }}>{data.day}일차</span>
           <div style={{ paddingBottom: 8 }}>
-            <ProgressRing pct={37} size={52} stroke={3} color={C.mint} trackColor={C.border2} label="37%" />
+            <ProgressRing pct={data.day} size={52} stroke={3} color={C.mint} trackColor={C.border2} label={`${data.day}%`} />
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
           <div style={{ flex: 1, maxWidth: 360, height: 2, background: C.border2, borderRadius: 1 }}>
-            <div style={{ width: '37%', height: '100%', background: C.mint, borderRadius: 1 }} />
+            <div style={{ width: `${data.day}%`, height: '100%', background: C.mint, borderRadius: 1 }} />
           </div>
-          <span style={{ fontSize: 11, color: C.alt }}>63일 남음</span>
+          <span style={{ fontSize: 11, color: C.alt }}>{100 - data.day}일 남음</span>
         </div>
       </div>
 
@@ -333,8 +340,8 @@ function DashboardPage({ setPage }: { setPage: (p: Page) => void }) {
 /* ═══════════════════════════════════════════════
    TIMELINE PAGE
 ═══════════════════════════════════════════════ */
-function TimelinePage() {
-  const [sel, setSel] = useState(37)
+function TimelinePage({ currentDay }: { currentDay: number }) {
+  const [sel, setSel] = useState(currentDay)
   const [rows, setRows] = useState<TimelineEntry[]>([])
   const [error, setError] = useState('')
 
@@ -342,10 +349,9 @@ function TimelinePage() {
     api.timeline().then(setRows).catch((err) => setError(err.message))
   }, [])
 
-  const completedDays = rows.filter((row) => row.day_number <= 37).length || 37
+  const completedDays = currentDay
   const d = rows.find((row) => row.day_number === sel) ?? rows[0]
   if (error) return <ErrorBlock message={error} />
-  if (!d) return <LoadingBlock />
 
   return (
     <div style={{ padding: '32px 36px' }}>
@@ -401,12 +407,12 @@ function TimelinePage() {
           <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 4 }}>선택한 날짜</div>
           <div style={{ fontSize: 34, fontWeight: 900, color: C.white, letterSpacing: '-0.03em', marginBottom: 18 }}>{sel}일차</div>
 
-          {[['PC', fmtMinutes(d.pc_minutes)], ['휴대폰', fmtMinutes(d.phone_minutes)], ['집중', fmtMinutes(d.focus_minutes)], ['수면', fmtMinutes(d.sleep_minutes)], ['걸음', d.steps.toLocaleString()]].map(([k, v]) => (
+          {d ? [['PC', fmtMinutes(d.pc_minutes)], ['휴대폰', fmtMinutes(d.phone_minutes)], ['공부', fmtMinutes(d.focus_minutes)], ['수면', fmtMinutes(d.sleep_minutes)], ['걸음', d.steps.toLocaleString()]].map(([k, v]) => (
             <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 0', borderBottom: `1px solid ${C.border}` }}>
               <span style={{ fontSize: 11, color: C.alt }}>{k}</span>
               <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: C.muted }}>{v}</span>
             </div>
-          ))}
+          )) : <div style={{ fontSize: 12, color: C.alt, padding: '12px 0' }}>아직 저장된 기록이 없습니다.</div>}
 
           <div style={{ marginTop: 16, marginBottom: 12 }}>
             <DotScore label="Focus" value={d.focusScore} color={C.mint} />
@@ -418,13 +424,13 @@ function TimelinePage() {
             <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 6 }}>커밋</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <CommitPips count={d.commits} />
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: C.mint }}>{d.github_commits}</span>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: C.mint }}>{d?.github_commits ?? 0}</span>
             </div>
           </div>
 
           <div style={{ background: C.surface, borderRadius: 10, padding: '12px 14px' }}>
             <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 6 }}>메모</div>
-            <p style={{ fontSize: 12, color: C.muted, margin: 0, lineHeight: 1.7 }}>{d.note || '아직 기록된 메모가 없습니다.'}</p>
+            <p style={{ fontSize: 12, color: C.muted, margin: 0, lineHeight: 1.7 }}>{d?.note || '아직 기록된 메모가 없습니다.'}</p>
           </div>
         </div>
       </div>
@@ -471,12 +477,13 @@ function AnalyticsPage() {
   if (error) return <ErrorBlock message={error} />
   if (!data) return <LoadingBlock />
 
-  const screenPc = data.rows.map((row) => row.pc_minutes / 60)
-  const screenPhone = data.rows.map((row) => row.phone_minutes / 60)
-  const sleepData = data.rows.map((row) => row.sleep_minutes / 60)
-  const focusData = data.rows.map((row) => row.focus_minutes / 60)
-  const stepsData = data.rows.map((row) => row.steps)
-  const ghData = data.rows.map((row) => row.github_commits)
+  const rows = data.rows.length ? data.rows : [{ pc_minutes: 0, phone_minutes: 0, sleep_minutes: 0, focus_minutes: 0, steps: 0, github_commits: 0 } as TimelineEntry]
+  const screenPc = rows.map((row) => row.pc_minutes / 60)
+  const screenPhone = rows.map((row) => row.phone_minutes / 60)
+  const sleepData = rows.map((row) => row.sleep_minutes / 60)
+  const focusData = rows.map((row) => row.focus_minutes / 60)
+  const stepsData = rows.map((row) => row.steps)
+  const ghData = rows.map((row) => row.github_commits)
   const avg = (arr: number[]) => arr.length ? arr.reduce((a, v) => a + v, 0) / arr.length : 0
 
   const insights = [
@@ -613,7 +620,7 @@ function Legend({ color, label }: { color: string; label: string }) {
 }
 
 function GithubHeatmap({ data }: { data: number[] }) {
-  const max = Math.max(...data)
+  const max = Math.max(1, ...data)
   const opacity = (v: number) => v === 0 ? 0.06 : 0.15 + (v / max) * 0.85
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
@@ -635,7 +642,7 @@ function GithubHeatmap({ data }: { data: number[] }) {
 /* ═══════════════════════════════════════════════
    FOCUS
 ═══════════════════════════════════════════════ */
-function FocusPage() {
+function FocusPage({ currentDay }: { currentDay: number }) {
   const [running, setRunning] = useState(false)
   const [secs, setSecs] = useState(0)
   const [cat, setCat] = useState('개발')
@@ -651,14 +658,14 @@ function FocusPage() {
   const totalMins = sessions.reduce((a, s) => a + s.duration_minutes, 0) + Math.floor(secs / 60)
 
   useEffect(() => {
-    api.focusSessions(37).then(setSessions).catch((err) => setError(err.message))
+    api.focusSessions(currentDay).then(setSessions).catch((err) => setError(err.message))
     api.studyCategories()
       .then((items) => {
         setCategories(items)
         if (items[0]) setCat(items[0].name)
       })
       .catch((err) => setError(err.message))
-  }, [])
+  }, [currentDay])
 
   useEffect(() => {
     if (running) ref.current = setInterval(() => setSecs(s => s + 1), 1000)
@@ -685,7 +692,7 @@ function FocusPage() {
     setSaving(true)
     try {
       const saved = await api.addFocusSession({
-        day_number: 37,
+        day_number: currentDay,
         category: cat,
         note,
         started_at: startedAt,
@@ -917,7 +924,7 @@ function DevicesPage() {
 /* ═══════════════════════════════════════════════
    DAILY CHECK-IN
 ═══════════════════════════════════════════════ */
-function CheckinPage({ setPage }: { setPage: (p: Page) => void }) {
+function CheckinPage({ setPage, currentDay }: { setPage: (p: Page) => void; currentDay: number }) {
   const [focus, setFocus] = useState(0)
   const [sat, setSat] = useState(0)
   const [note, setNote] = useState('')
@@ -926,7 +933,7 @@ function CheckinPage({ setPage }: { setPage: (p: Page) => void }) {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    api.checkin(37)
+    api.checkin(currentDay)
       .then((checkin) => {
         if (!checkin) return
         setFocus(checkin.focus_score)
@@ -935,14 +942,14 @@ function CheckinPage({ setPage }: { setPage: (p: Page) => void }) {
         setDone(true)
       })
       .catch((err) => setError(err.message))
-  }, [])
+  }, [currentDay])
 
   const save = async () => {
     setSaving(true)
     setError('')
     try {
       await api.saveCheckin({
-        day_number: 37,
+        day_number: currentDay,
         focus_score: focus,
         satisfaction_score: sat,
         note,
@@ -959,7 +966,7 @@ function CheckinPage({ setPage }: { setPage: (p: Page) => void }) {
   return (
     <div style={{ padding: '40px 36px', maxWidth: 500 }}>
       <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.alt, letterSpacing: '0.15em', marginBottom: 6 }}>오늘 체크인</div>
-      <div style={{ fontSize: 28, fontWeight: 900, color: C.white, marginBottom: 4, letterSpacing: '-0.02em' }}>37일차</div>
+      <div style={{ fontSize: 28, fontWeight: 900, color: C.white, marginBottom: 4, letterSpacing: '-0.02em' }}>{currentDay}일차</div>
       <div style={{ fontSize: 11, color: C.alt, marginBottom: 40 }}>30초 안에 끝납니다.</div>
       {error && <div style={{ color: C.mintMuted, fontSize: 12, marginBottom: 18 }}>{error}</div>}
 
@@ -1129,7 +1136,8 @@ function ResultPage() {
 ═══════════════════════════════════════════════ */
 function Sparkline({ data, color, max }: { data: number[]; color: string; max: number }) {
   const W = 120, H = 28
-  const pts = data.map((v, i) => `${(i / (data.length - 1)) * W},${H - (v / max) * H}`).join(' ')
+  const denom = Math.max(1, data.length - 1)
+  const pts = data.map((v, i) => `${(i / denom) * W},${H - (v / max) * H}`).join(' ')
   return (
     <svg width="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display: 'block', height: 28 }}>
       <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
@@ -1144,7 +1152,8 @@ function Sparkline({ data, color, max }: { data: number[]; color: string; max: n
 
 function AreaChart({ data, maxVal, color, h }: { data: number[]; maxVal: number; color: string; h: number }) {
   const W = 300
-  const pts = data.map((v, i) => `${(i / (data.length - 1)) * W},${h - (v / maxVal) * h}`)
+  const denom = Math.max(1, data.length - 1)
+  const pts = data.map((v, i) => `${(i / denom) * W},${h - (v / maxVal) * h}`)
   const line = pts.join(' ')
   const area = `0,${h} ${line} ${W},${h}`
   const id = `ag${color.replace('#', '')}`
@@ -1164,7 +1173,10 @@ function AreaChart({ data, maxVal, color, h }: { data: number[]; maxVal: number;
 
 function DualLineChart({ a, b, maxVal, colorA, colorB, h }: { a: number[]; b: number[]; maxVal: number; colorA: string; colorB: string; h: number }) {
   const W = 300
-  const pts = (arr: number[]) => arr.map((v, i) => `${(i / (arr.length - 1)) * W},${h - (v / maxVal) * h}`).join(' ')
+  const pts = (arr: number[]) => {
+    const denom = Math.max(1, arr.length - 1)
+    return arr.map((v, i) => `${(i / denom) * W},${h - (v / maxVal) * h}`).join(' ')
+  }
   return (
     <svg width="100%" viewBox={`0 0 ${W} ${h}`} preserveAspectRatio="none" style={{ display: 'block', height: h }}>
       <polyline points={pts(a)} fill="none" stroke={colorA} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />

@@ -18,7 +18,6 @@ C:\Users\user\Documents\100-days-dashboard
 ├─ server/
 │  ├─ index.mjs          # Node API 서버
 │  ├─ db.mjs             # SQLite 연결 + 테이블 생성
-│  ├─ seed.mjs           # 테스트용 mock data 생성
 │  └─ data/
 │     ├─ .gitkeep        # 빈 data 폴더를 Git에 유지
 │     └─ 100days.db      # 로컬 실행 시 자동 생성 (Git에는 포함하지 않음)
@@ -44,43 +43,43 @@ npm run dev
 - API: http://localhost:4000
 - API 상태 확인: http://localhost:4000/api/health
 
-## DB / Mock Data
+## DB / 실제 기록 데이터
 
-`npm run dev` 또는 `npm run dev:api`를 처음 실행하면 `server/data/100days.db`가 자동 생성됩니다.
+`npm run dev` 또는 `npm run dev:api`를 처음 실행하면 `server/data/100days.db`가 자동 생성됩니다. DB에는 목데이터를 넣지 않고, 기본 100일 챌린지와 공부 카테고리만 준비합니다.
 
-DB에는 테스트용으로 다음 데이터가 미리 들어갑니다.
+앱에서 직접 기록하면 다음 데이터가 저장됩니다.
 
-- DAY 1 ~ DAY 100 daily metrics
-- PC / Phone / Focus / Sleep / Steps / Exercise
-- Development time / GitHub commits
-- VS Code / YouTube / Chrome / Instagram / Discord 사용시간
-- DAY 1 ~ DAY 37 timeline events
-- Laptop / Android phone / Galaxy Watch / GitHub 연결 정보
-- Focus sessions
+- 공부 기록과 사용자가 추가한 공부/오프라인 활동 카테고리
 - Daily check-in
+- 이후 수집기 연동으로 들어올 PC / Phone / Sleep / Steps / Exercise / GitHub 지표
 
 SQLite DB 파일(`server/data/*.db`)은 `.gitignore`에 포함되어 GitHub에 올라가지 않습니다.
 
-DB를 초기화하고 100일치 테스트 목데이터를 다시 만들려면:
+DB를 초기화하고 실제 기록을 모두 비우려면:
 
 ```bash
 npm run db:reset
 ```
 
-또는 `server/data/100days.db`를 직접 삭제한 후 서버를 다시 실행해도 됩니다.
+또는 `server/data/100days.db`를 직접 삭제한 후 서버를 다시 실행해도 됩니다. 이 경우에도 목데이터는 생성되지 않습니다.
 
 ## API
 
 ```text
 GET  /api/health
 GET  /api/challenge
-GET  /api/dashboard/today?day=37
+GET  /api/dashboard/today
+GET  /api/dashboard/today?day=1
 GET  /api/timeline
 GET  /api/analytics?days=30
 GET  /api/devices
-GET  /api/focus/sessions?day=37
+GET  /api/study/categories
+POST /api/study/categories
+GET  /api/focus/sessions
+GET  /api/focus/sessions?day=1
 POST /api/focus/sessions
-GET  /api/checkins?day=37
+GET  /api/checkins
+GET  /api/checkins?day=1
 POST /api/checkins
 GET  /api/result
 ```
@@ -89,7 +88,6 @@ GET  /api/result
 
 ```json
 {
-  "day_number": 37,
   "focus_score": 8,
   "satisfaction_score": 7,
   "note": "오늘 React 공부를 많이 했다."
@@ -100,8 +98,8 @@ GET  /api/result
 
 ```json
 {
-  "day_number": 37,
-  "category": "Development",
+  "category": "독서",
+  "note": "노트북 없이 교재 읽기",
   "started_at": "2026-08-10T21:00:00+09:00",
   "ended_at": "2026-08-10T22:15:00+09:00",
   "duration_minutes": 75
@@ -110,7 +108,7 @@ GET  /api/result
 
 ## 이후 실제 디바이스 연결
 
-현재 DB 값은 테스트용 mock data입니다. 이후 각각의 수집기가 같은 API/DB 모델로 데이터를 보내도록 교체합니다.
+현재 앱은 목데이터 없이 실제 저장된 기록만 표시합니다. 아직 자동 수집기가 없는 항목은 0 또는 빈 목록으로 표시되며, 이후 각각의 수집기가 같은 API/DB 모델로 데이터를 보내도록 연결합니다.
 
 1. Windows Desktop Tracker → PC/app usage
 2. Chrome Extension → website usage

@@ -11,6 +11,15 @@ const dbPath = path.join(dataDir, '100days.db')
 export const db = new DatabaseSync(dbPath)
 db.exec('PRAGMA foreign_keys = ON;')
 
+function todayKst() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date())
+}
+
 db.exec(`
 CREATE TABLE IF NOT EXISTS challenges (
   id INTEGER PRIMARY KEY,
@@ -89,6 +98,11 @@ if (db.prepare('SELECT COUNT(*) AS count FROM study_categories').get().count ===
   for (const name of ['개발', '코딩 테스트', '학교 공부', '자격증', '독서', '운동', '휴식', '기타']) {
     insertCategory.run(name, new Date().toISOString())
   }
+}
+
+if (db.prepare('SELECT COUNT(*) AS count FROM challenges').get().count === 0) {
+  db.prepare('INSERT INTO challenges (id, name, start_date, target_days) VALUES (1, ?, ?, 100)')
+    .run('100 DAYS', process.env.CHALLENGE_START_DATE || todayKst())
 }
 
 export function isSeeded() {
