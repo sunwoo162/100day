@@ -626,7 +626,19 @@ function Legend({ color, label }: { color: string; label: string }) {
 
 function EmptyChart({ height, label = '-' }: { height: number; label?: string }) {
   return (
-    <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px dashed ${C.border2}`, borderRadius: 8, color: C.alt, fontSize: 11 }}>
+    <div style={{
+      height,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      border: `1px dashed ${C.border2}`,
+      borderRadius: 8,
+      color: C.mint,
+      fontFamily: "'JetBrains Mono', monospace",
+      fontSize: 28,
+      fontWeight: 800,
+      lineHeight: 1,
+    }}>
       {label}
     </div>
   )
