@@ -107,28 +107,7 @@ function requestedDay(url, challenge) {
   const day = Number(url.searchParams.get('day') || currentDay(challenge))
   return Math.max(1, Math.min(challenge.target_days, Number.isFinite(day) ? day : currentDay(challenge)))
 }
-function formatMinutes(min) {
-  const totalSeconds = Math.round((Number(min) || 0) * 60)
-  const hours = Math.floor(totalSeconds / 3600)
-  const minutes = Math.floor((totalSeconds % 3600) / 60)
-  const seconds = totalSeconds % 60
-  return `${hours}h ${String(minutes).padStart(2,'0')}m ${String(seconds).padStart(2,'0')}s`
-}
-function isDevelopmentApp(appName) {
-  return /code|visual studio|vscode|cursor|webstorm|intellij|pycharm|terminal|powershell|cmd|git|github|node|npm|pnpm|vite|localhost|devtools/i.test(appName)
-}
-function normalizeAppName(appName) {
-  const raw = String(appName || 'Unknown').trim()
-  const name = raw.split(' - ')[0].trim()
-  if (/하루핏 웹/i.test(raw)) return '하루핏 웹'
-  if (/^(code|cursor)$/i.test(name) || /visual studio code|vs code/i.test(raw)) return 'VS Code'
-  if (/^(chrome|msedge|firefox|brave|whale)$/i.test(name) || /google chrome|microsoft edge/i.test(raw)) return 'Chrome'
-  if (/^(windowsterminal|powershell|pwsh|cmd)$/i.test(name)) return 'Terminal'
-  if (/^(devenv)$/i.test(name)) return 'Visual Studio'
-  if (/^(idea64|webstorm64|pycharm64|rider64)$/i.test(name)) return 'JetBrains'
-  if (/^discord$/i.test(name)) return 'Discord'
-  return name || 'Unknown'
-}
+function formatMinutes(min) { return `${Math.floor(min/60)}h ${String(min%60).padStart(2,'0')}m` }
 function parseCookies(req) {
   return Object.fromEntries(String(req.headers.cookie || '').split(';').map(part => {
     const [key, ...value] = part.trim().split('=')
@@ -373,20 +352,12 @@ const server = http.createServer(async (req, res) => {
       const day = requestedDay(url, challenge)
       const metric = getMetric(user.id, challenge, day)
       const prev = getMetric(user.id, challenge, Math.max(1, day - 1))
-      const appRows = db.prepare(`SELECT app_name AS name, source, SUM(minutes) AS minutes
+      const apps = db.prepare(`SELECT app_name AS name, source, SUM(minutes) AS minutes
         FROM app_usage
         WHERE user_id = ? AND day_number = ?
         GROUP BY app_name, source
         ORDER BY minutes DESC
-        LIMIT 50`).all(user.id, day)
-      const appTotals = new Map()
-      appRows.forEach((row) => {
-        const name = normalizeAppName(row.name)
-        const existing = appTotals.get(name) || { name, source: row.source, minutes: 0 }
-        existing.minutes += Number(row.minutes) || 0
-        appTotals.set(name, existing)
-      })
-      const apps = [...appTotals.values()].sort((a, b) => b.minutes - a.minutes).slice(0, 8)
+        LIMIT 8`).all(user.id, day)
       const events = db.prepare('SELECT time, label, type FROM timeline_events WHERE user_id = ? AND day_number = ? ORDER BY time').all(user.id, day)
       const recent = db.prepare('SELECT * FROM daily_metrics WHERE user_id = ? AND challenge_id = ? AND day_number <= ? ORDER BY day_number DESC LIMIT 7').all(user.id, challenge.id, day).reverse()
       return json(res, 200, {
@@ -417,17 +388,9 @@ const server = http.createServer(async (req, res) => {
       const days = Math.max(1, Math.min(100, Number(url.searchParams.get('days') || 30)))
       const day = currentDay(challenge)
       const rows = db.prepare('SELECT * FROM daily_metrics WHERE user_id = ? AND challenge_id = ? AND day_number <= ? ORDER BY day_number DESC LIMIT ?').all(user.id, challenge.id, day, days).reverse()
-      const topAppRows = db.prepare(`SELECT app_name AS name, SUM(minutes) AS minutes FROM app_usage WHERE day_number IN (
+      const topApps = db.prepare(`SELECT app_name AS name, SUM(minutes) AS minutes FROM app_usage WHERE day_number IN (
           SELECT day_number FROM daily_metrics WHERE user_id = ? AND challenge_id = ? AND day_number <= ? ORDER BY day_number DESC LIMIT ?
-        ) AND user_id = ? GROUP BY app_name ORDER BY minutes DESC LIMIT 50`).all(user.id, challenge.id, day, days, user.id)
-      const topAppTotals = new Map()
-      topAppRows.forEach((row) => {
-        const name = normalizeAppName(row.name)
-        const existing = topAppTotals.get(name) || { name, minutes: 0 }
-        existing.minutes += Number(row.minutes) || 0
-        topAppTotals.set(name, existing)
-      })
-      const topApps = [...topAppTotals.values()].sort((a, b) => b.minutes - a.minutes).slice(0, 8)
+        ) AND user_id = ? GROUP BY app_name ORDER BY minutes DESC LIMIT 8`).all(user.id, challenge.id, day, days, user.id)
       return json(res, 200, { days, rows, topApps })
     }
 
@@ -468,7 +431,7 @@ const server = http.createServer(async (req, res) => {
       const body = await readBody(req)
       const minutes = Math.max(0, Math.min(240, Number(body.minutes || 0)))
       if (!minutes) return json(res, 400, { error: 'minutes 값이 필요합니다' })
-      const appName = normalizeAppName(String(body.app_name || 'Unknown').trim().slice(0, 120) || 'Unknown')
+      const appName = String(body.app_name || 'Unknown').trim().slice(0, 120) || 'Unknown'
       const occurredAt = body.occurred_at ? new Date(body.occurred_at) : new Date()
       const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(occurredAt)
       const challenge = getUserChallenge(device.user_id)
@@ -476,10 +439,6 @@ const server = http.createServer(async (req, res) => {
       ensureMetric(device.user_id, challenge, day)
       db.prepare('UPDATE daily_metrics SET pc_minutes = pc_minutes + ? WHERE user_id = ? AND challenge_id = ? AND day_number = ?')
         .run(minutes, device.user_id, challenge.id, day)
-      if (isDevelopmentApp(appName)) {
-        db.prepare('UPDATE daily_metrics SET development_minutes = development_minutes + ? WHERE user_id = ? AND challenge_id = ? AND day_number = ?')
-          .run(minutes, device.user_id, challenge.id, day)
-      }
       db.prepare('INSERT INTO app_usage (user_id, day_number, source, app_name, minutes) VALUES (?, ?, ?, ?, ?)')
         .run(device.user_id, day, 'pc', appName, minutes)
       db.prepare('UPDATE devices SET last_sync = ?, source = ? WHERE id = ?')
@@ -493,7 +452,7 @@ const server = http.createServer(async (req, res) => {
       const body = await readBody(req)
       const minutes = Math.max(0, Math.min(240, Number(body.minutes || 0)))
       if (!minutes) return json(res, 400, { error: 'minutes 값이 필요합니다' })
-      const appName = normalizeAppName(String(body.app_name || (device.kind === 'tablet' ? '태블릿' : '휴대폰')).trim().slice(0, 120) || '휴대폰')
+      const appName = String(body.app_name || (device.kind === 'tablet' ? '태블릿' : '휴대폰')).trim().slice(0, 120) || '휴대폰'
       const occurredAt = body.occurred_at ? new Date(body.occurred_at) : new Date()
       const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(occurredAt)
       const challenge = getUserChallenge(device.user_id)

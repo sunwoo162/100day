@@ -64,16 +64,13 @@ function Get-ActiveAppName {
   $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
   if (-not $process) { return "Unknown" }
 
-  $name = $process.ProcessName
-  switch -Regex ($name) {
-    "^(Code|Cursor)$" { return "VS Code" }
-    "^(chrome|msedge|firefox|brave|whale)$" { return "Chrome" }
-    "^(WindowsTerminal|powershell|pwsh|cmd)$" { return "Terminal" }
-    "^(devenv)$" { return "Visual Studio" }
-    "^(idea64|webstorm64|pycharm64|rider64)$" { return "JetBrains" }
-    "^(Discord)$" { return "Discord" }
-    default { return $name }
+  $title = New-Object System.Text.StringBuilder 256
+  [Win32Tracker]::GetWindowText($handle, $title, $title.Capacity) | Out-Null
+  $windowTitle = $title.ToString().Trim()
+  if ($windowTitle) {
+    return "$($process.ProcessName) - $windowTitle"
   }
+  return $process.ProcessName
 }
 
 function Connect-Device($token) {
@@ -82,7 +79,6 @@ function Connect-Device($token) {
 }
 
 function Send-Usage($deviceToken, $appName, $minutes) {
-  if ($minutes -le 0) { return }
   $body = @{
     app_name = $appName
     minutes = $minutes
@@ -108,12 +104,12 @@ if ($PairingToken) {
     connectedAt = (Get-Date).ToUniversalTime().ToString("o")
   }
   Save-Config $config
-  Write-Host "Harufit tracker connected: $($device.name)"
+  Write-Host "하루핏 트래커 연결 완료: $($device.name)"
 }
 
 if (-not $config.deviceToken) {
-  Write-Host "Pairing token is required."
-  Write-Host "Example: pwsh scripts/windows-pc-tracker.ps1 -PairingToken YOUR_CODE"
+  Write-Host "기기 연결 코드가 필요합니다."
+  Write-Host "예: pwsh scripts/windows-pc-tracker.ps1 -PairingToken 연결코드"
   exit 1
 }
 
@@ -121,45 +117,17 @@ if ($config.apiBase) {
   $ApiBase = $config.apiBase
 }
 
-Write-Host "Harufit PC tracker is running. Press Ctrl+C to stop."
-
-$activeApp = $null
-$activeSince = Get-Date
-
-function Flush-ActiveUsage {
-  if (-not $activeApp) { return $false }
-  $elapsedMinutes = ((Get-Date) - $activeSince).TotalMinutes
-  if ($elapsedMinutes -lt 0.01) { return $false }
-  $roundedMinutes = [math]::Round($elapsedMinutes, 2)
-  $nowText = Get-Date -Format "HH:mm:ss"
-  Send-Usage $config.deviceToken $activeApp $roundedMinutes
-  Write-Host ("{0} recorded: {1} {2} min" -f $nowText, $activeApp, $roundedMinutes)
-  return $true
-}
+Write-Host "하루핏 PC 트래커 실행 중. 중지하려면 Ctrl+C를 누르세요."
 
 while ($true) {
   try {
     $idleSeconds = Get-IdleSeconds
     if ($idleSeconds -lt $IdleLimitSeconds) {
       $appName = Get-ActiveAppName
-      if ($activeApp -and $activeApp -ne $appName) {
-        Flush-ActiveUsage
-        $activeSince = Get-Date
-      }
-      $activeApp = $appName
-      if (((Get-Date) - $activeSince).TotalSeconds -ge $IntervalSeconds) {
-        if (Flush-ActiveUsage) {
-          $activeSince = Get-Date
-        }
-      }
-      $nowText = Get-Date -Format "HH:mm:ss"
-      Write-Host ("{0} tracking: {1}" -f $nowText, $appName)
+      Send-Usage $config.deviceToken $appName ([math]::Max(1, [math]::Round($IntervalSeconds / 60)))
+      Write-Host "$(Get-Date -Format HH:mm:ss) 기록: $appName"
     } else {
-      Flush-ActiveUsage
-      $activeApp = $null
-      $activeSince = Get-Date
-      $nowText = Get-Date -Format "HH:mm:ss"
-      Write-Host ("{0} idle: not recorded" -f $nowText)
+      Write-Host "$(Get-Date -Format HH:mm:ss) 유휴 상태라 기록하지 않음"
     }
   } catch {
     Write-Warning $_.Exception.Message

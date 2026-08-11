@@ -73,26 +73,21 @@ function urlForPage(page: Page) {
 }
 
 function fmtMinutes(min: number) {
-  const totalSeconds = Math.round((Number(min) || 0) * 60)
-  const h = Math.floor(totalSeconds / 3600)
-  const m = Math.floor((totalSeconds % 3600) / 60)
-  const s = totalSeconds % 60
-  if (h <= 0 && m <= 0) return `${s}초`
-  if (h <= 0) return `${m}분 ${String(s).padStart(2, '0')}초`
-  return `${h}시간 ${String(m).padStart(2, '0')}분 ${String(s).padStart(2, '0')}초`
+  const h = Math.floor(min / 60)
+  const m = min % 60
+  if (h <= 0) return `${m}분`
+  return `${h}시간 ${String(m).padStart(2, '0')}분`
 }
 
 function fmtDelta(delta: number, unit = '분') {
   if (delta === 0) return '어제와 같음'
-  if (unit === '분') return `어제보다 ${delta > 0 ? '+' : '-'}${fmtMinutes(Math.abs(delta))}`
   return `어제보다 ${delta > 0 ? '+' : '-'}${Math.abs(delta).toLocaleString()}${unit}`
 }
 
 function parseHourValue(display: string) {
   const hours = display.match(/(\d+)h/)?.[1] ?? '0'
   const mins = display.match(/(\d+)m/)?.[1] ?? '0'
-  const secs = display.match(/(\d+)s/)?.[1] ?? '0'
-  return `${Number(hours)}시간 ${String(Number(mins)).padStart(2, '0')}분 ${String(Number(secs)).padStart(2, '0')}초`
+  return `${Number(hours)}시간 ${String(Number(mins)).padStart(2, '0')}분`
 }
 
 function shortTime(iso: string | null) {
@@ -304,10 +299,7 @@ function DashboardPage({ setPage, currentDay }: { setPage: (p: Page) => void; cu
   const [error, setError] = useState('')
 
   useEffect(() => {
-    const load = () => api.dashboard(currentDay).then(setData).catch((err) => setError(err.message))
-    load()
-    const interval = window.setInterval(load, 15000)
-    return () => window.clearInterval(interval)
+    api.dashboard(currentDay).then(setData).catch((err) => setError(err.message))
   }, [currentDay])
 
   if (error) return <ErrorBlock message={error} />
@@ -318,19 +310,25 @@ function DashboardPage({ setPage, currentDay }: { setPage: (p: Page) => void; cu
   const hasRecent = recent.length > 0
   const spark = {
     pc: recent.map((row) => row.pc_minutes / 60),
+    phone: recent.map((row) => row.phone_minutes / 60),
     focus: recent.map((row) => row.focus_minutes / 60),
+    steps: recent.map((row) => row.steps),
+    exercise: recent.map((row) => row.exercise_minutes),
     development: recent.map((row) => row.development_minutes / 60),
     github: recent.map((row) => row.github_commits),
   }
   const stats = [
-    { id: 'pc', label: 'PC', value: fmtMinutes(m.pc.minutes ?? 0), sub: fmtDelta(m.pc.delta), up: m.pc.delta >= 0, spark: spark.pc, max: 10, color: C.mint },
+    { id: 'pc', label: 'PC', value: parseHourValue(m.pc.display || '0h 00m'), sub: fmtDelta(m.pc.delta), up: m.pc.delta >= 0, spark: spark.pc, max: 10, color: C.mint },
+    { id: 'phone', label: '휴대폰', value: parseHourValue(m.phone.display || '0h 00m'), sub: fmtDelta(m.phone.delta), up: m.phone.delta <= 0, spark: spark.phone, max: 10, color: C.faint },
     { id: 'focus', label: '공부', value: parseHourValue(m.focus.display || '0h 00m'), sub: fmtDelta(m.focus.delta), up: m.focus.delta >= 0, spark: spark.focus, max: 5, color: C.mint },
-    { id: 'dev', label: '개발', value: fmtMinutes(m.development.minutes ?? 0), sub: fmtDelta(m.development.delta), up: m.development.delta >= 0, spark: spark.development, max: 5, color: C.mintBright },
+    { id: 'steps', label: '걸음', value: (m.steps.value || 0).toLocaleString(), sub: fmtDelta(m.steps.delta, ''), up: m.steps.delta >= 0, spark: spark.steps, max: 12000, color: C.mint },
+    { id: 'ex', label: '운동', value: fmtMinutes(m.exercise.minutes || 0), sub: fmtDelta(m.exercise.delta), up: m.exercise.delta >= 0, spark: spark.exercise, max: 90, color: C.mintMuted },
+    { id: 'dev', label: '개발', value: parseHourValue(m.development.display || '0h 00m'), sub: fmtDelta(m.development.delta), up: m.development.delta >= 0, spark: spark.development, max: 5, color: C.mintBright },
     { id: 'git', label: 'GitHub', value: `커밋 ${m.github.commits || 0}개`, sub: fmtDelta(m.github.delta, ''), up: m.github.delta >= 0, spark: spark.github, max: 12, color: C.mint },
   ]
 
-  const maxAppMinutes = Math.max(1 / 60, ...data.apps.map((app) => app.minutes))
-  const apps = data.apps.filter((app) => app.minutes > 0).map((app, i) => ({
+  const maxAppMinutes = Math.max(1, ...data.apps.map((app) => app.minutes))
+  const apps = data.apps.map((app, i) => ({
     name: app.name,
     dur: fmtMinutes(app.minutes),
     pct: Math.round((app.minutes / maxAppMinutes) * 100),
@@ -348,7 +346,9 @@ function DashboardPage({ setPage, currentDay }: { setPage: (p: Page) => void; cu
   }))
 
   const pcMinutes = m.pc.minutes ?? 0
-  const devPcts = pcMinutes > 0 ? [1, 0] : [0, 0]
+  const phoneMinutes = m.phone.minutes ?? 0
+  const deviceTotal = pcMinutes + phoneMinutes
+  const devPcts = deviceTotal > 0 ? [pcMinutes / deviceTotal, phoneMinutes / deviceTotal] : [0, 0]
 
   return (
     <div style={{ padding: '32px 36px', maxWidth: 1080 }}>
@@ -393,7 +393,8 @@ function DashboardPage({ setPage, currentDay }: { setPage: (p: Page) => void; cu
           <DeviceRing pcts={devPcts} />
           <div style={{ marginTop: 18, width: '100%' }}>
             {[
-              { label: '노트북', val: fmtMinutes(m.pc.minutes ?? 0), color: C.mint },
+              { label: '노트북', val: parseHourValue(m.pc.display || '0h 00m'), color: C.mint },
+              { label: '휴대폰',  val: parseHourValue(m.phone.display || '0h 00m'), color: C.mintMuted },
             ].map((d) => (
               <div key={d.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 9 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
@@ -445,7 +446,7 @@ function DashboardPage({ setPage, currentDay }: { setPage: (p: Page) => void; cu
       <div style={{ marginTop: 16, background: 'linear-gradient(135deg, rgba(0,232,197,0.06) 0%, rgba(0,232,197,0.02) 100%)', borderRadius: 14, padding: '18px 24px', border: `1px solid rgba(0,232,197,0.12)`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
           <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 2 }}>공부 기록</div>
-          <div style={{ fontSize: 11, color: C.alt }}>화면 없이 하는 일을 타이머로 저장하세요.</div>
+          <div style={{ fontSize: 11, color: C.alt }}>노트북/휴대폰 없이 하는 일을 타이머로 저장하세요.</div>
         </div>
         <button onClick={() => setPage('focus')} style={{ padding: '9px 20px', borderRadius: 50, background: C.mint, color: C.ink, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, fontWeight: 700, border: 'none', cursor: 'pointer', letterSpacing: '0.04em' }}>
           Start →
@@ -544,7 +545,7 @@ function TimelinePage({ currentDay }: { currentDay: number }) {
           <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 4 }}>선택한 날짜</div>
           <div style={{ fontSize: 34, fontWeight: 900, color: C.white, letterSpacing: '-0.03em', marginBottom: 18 }}>{sel}일차</div>
 
-          {d ? [['총 사용 시간', fmtMinutes(usageMinutes(d))], ['PC', fmtMinutes(d.pc_minutes)], ['공부', fmtMinutes(d.focus_minutes)], ['개발', fmtMinutes(d.development_minutes)]].map(([k, v]) => (
+          {d ? [['총 사용 시간', fmtMinutes(usageMinutes(d))], ['PC', fmtMinutes(d.pc_minutes)], ['휴대폰', fmtMinutes(d.phone_minutes)], ['공부', fmtMinutes(d.focus_minutes)], ['걸음', d.steps.toLocaleString()]].map(([k, v]) => (
             <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 0', borderBottom: `1px solid ${C.border}` }}>
               <span style={{ fontSize: 12, color: C.muted, fontWeight: 600 }}>{k}</span>
               <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: C.muted }}>{v}</span>
@@ -594,8 +595,9 @@ function AnalyticsPage() {
   const rows = data.rows
   const hasRows = rows.length > 0
   const screenPc = rows.map((row) => row.pc_minutes / 60)
+  const screenPhone = rows.map((row) => row.phone_minutes / 60)
   const focusData = rows.map((row) => row.focus_minutes / 60)
-  const devData = rows.map((row) => row.development_minutes / 60)
+  const stepsData = rows.map((row) => row.steps)
   const ghData = rows.map((row) => row.github_commits)
   const avg = (arr: number[]) => arr.length ? arr.reduce((a, v) => a + v, 0) / arr.length : 0
 
@@ -605,7 +607,7 @@ function AnalyticsPage() {
   const apps = data.topApps.map((app, i) => ({
     name: app.name,
     pct: Math.round((app.minutes / maxAppMinutes) * 100),
-    duration: fmtMinutes(app.minutes),
+    hours: Math.round(app.minutes / 60),
     color: i === 0 ? C.mint : '#2a2a2a',
   }))
 
@@ -631,11 +633,12 @@ function AnalyticsPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
         {/* Screen time */}
-        <ChartCard title="PC 시간" subtitle="시간 / 일">
+        <ChartCard title="화면 시간" subtitle="PC vs 휴대폰 · 시간/일">
           <div style={{ display: 'flex', gap: 14, marginBottom: 12 }}>
             <Legend color={C.mint} label="PC" />
+            <Legend color="#3a3a3a" label="휴대폰" />
           </div>
-          {hasRows ? <BarChartSVG data={screenPc} maxVal={10} color={C.mint} h={90} /> : <EmptyChart height={90} />}
+          {hasRows ? <DualLineChart a={screenPc} b={screenPhone} maxVal={10} colorA={C.mint} colorB="#4a4a4a" h={90} /> : <EmptyChart height={90} />}
         </ChartCard>
 
         {/* Focus */}
@@ -647,13 +650,13 @@ function AnalyticsPage() {
           {hasRows ? <BarChartSVG data={focusData} maxVal={5} color={C.mint} h={90} /> : <EmptyChart height={90} />}
         </ChartCard>
 
-        {/* Development */}
-        <ChartCard title="개발 시간" subtitle="개발 앱 사용 시간 / 일">
+        {/* Steps */}
+        <ChartCard title="걸음 수" subtitle="일일 걸음 수">
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12 }}>
-            <span style={{ fontSize: 26, fontWeight: 800, color: C.white }}>{avg(devData).toFixed(1)}시간</span>
+            <span style={{ fontSize: 26, fontWeight: 800, color: C.white }}>{(avg(stepsData) / 1000).toFixed(1)}천</span>
             <span style={{ fontSize: 10, color: C.mint }}>평균</span>
           </div>
-          {hasRows ? <BarChartSVG data={devData} maxVal={5} color="#2a2a2a" accent={C.mint} h={90} /> : <EmptyChart height={90} />}
+          {hasRows ? <BarChartSVG data={stepsData.map(v => v / 1000)} maxVal={10} color="#2a2a2a" accent={C.mint} h={90} /> : <EmptyChart height={90} />}
         </ChartCard>
       </div>
 
@@ -673,7 +676,7 @@ function AnalyticsPage() {
                   <AppIconMini name={a.name} />
                   <span style={{ fontSize: 12, color: C.muted }}>{a.name}</span>
                 </div>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.alt }}>{a.duration}</span>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.alt }}>{a.hours}시간</span>
               </div>
               <div style={{ height: 3, background: C.border, borderRadius: 2 }}>
                 <div style={{ width: `${a.pct}%`, height: '100%', background: a.color, borderRadius: 2 }} />
@@ -730,11 +733,11 @@ function buildInsights(rows: TimelineEntry[]) {
   const first = rows[0]
   const last = rows[rows.length - 1]
   const insights: { icon: string; text: string }[] = []
+  const phoneDiff = last.phone_minutes - first.phone_minutes
   const studyDiff = last.focus_minutes - first.focus_minutes
-  const devDiff = last.development_minutes - first.development_minutes
   const commitTotal = rows.reduce((sum, row) => sum + row.github_commits, 0)
+  if (phoneDiff !== 0) insights.push({ icon: phoneDiff < 0 ? '↓' : '↑', text: `기간 첫 기록 대비 휴대폰 사용이 ${fmtMinutes(Math.abs(phoneDiff))} ${phoneDiff < 0 ? '줄었습니다.' : '늘었습니다.'}` })
   if (studyDiff !== 0) insights.push({ icon: studyDiff > 0 ? '↑' : '↓', text: `기간 첫 기록 대비 공부 시간이 ${fmtMinutes(Math.abs(studyDiff))} ${studyDiff > 0 ? '늘었습니다.' : '줄었습니다.'}` })
-  if (devDiff !== 0) insights.push({ icon: devDiff > 0 ? '↑' : '↓', text: `기간 첫 기록 대비 개발 시간이 ${fmtMinutes(Math.abs(devDiff))} ${devDiff > 0 ? '늘었습니다.' : '줄었습니다.'}` })
   if (commitTotal > 0) insights.push({ icon: '•', text: `선택 기간에 GitHub 커밋 ${commitTotal}개가 기록됐습니다.` })
   return insights
 }
@@ -886,7 +889,7 @@ function FocusPage({ currentDay }: { currentDay: number }) {
               <button onClick={addCategory} style={{ padding: '0 14px', borderRadius: 8, border: 'none', background: C.chip, color: C.mint, cursor: 'pointer', fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12 }}>추가</button>
             </div>
             <input value={note} onChange={e => setNote(e.target.value)}
-              placeholder="화면 없이 하는 일을 적어두기"
+              placeholder="노트북/휴대폰 없이 하는 일을 적어두기"
               style={{ width: '100%', marginTop: 10, padding: '10px 12px', background: C.raised, border: `1px solid ${C.border2}`, borderRadius: 8, color: C.white, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, outline: 'none' }}
             />
           </div>
@@ -952,6 +955,7 @@ function DevicesPage() {
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
   const [connectToken, setConnectToken] = useState('')
+  const [lockedDevice, setLockedDevice] = useState<{ title: string; description: string } | null>(null)
 
   const refresh = () => api.devices().then(setDevices).catch((err) => setError(err.message))
 
@@ -1040,8 +1044,8 @@ function DevicesPage() {
     }
     if (pendingDevice?.kind === 'phone') {
       return {
-        title: '기기 연결 코드',
-        description: '연동 프로그램에서 이 코드를 입력하면 사용 기록이 이 계정에 저장됩니다.',
+        title: '휴대폰 연결 코드',
+        description: 'Android 연동 앱에서 이 코드를 입력하고 사용정보 접근 권한을 허용하면 휴대폰 사용 기록이 이 계정에 저장됩니다.',
         command: '',
       }
     }
@@ -1124,14 +1128,21 @@ function DevicesPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
           {[
             { label: 'PC/노트북 연결', sub: 'Windows 시간 측정', kind: 'computer', name: '노트북 트래커', platform: 'Windows', Illu: () => <IlluLaptop dim /> },
+            { label: '휴대폰 연결', sub: 'v2 Android 앱 필요', kind: 'phone', locked: true, lockText: '휴대폰 사용시간은 웹에서 읽을 수 없어서 Android 앱과 Usage Access 권한이 필요합니다.', Illu: () => <IlluPhone dim /> },
+            { label: '태블릿 연결', sub: 'v2 Android/iPad 앱 필요', kind: 'tablet', locked: true, lockText: '태블릿 사용시간도 OS 권한이 필요해서 v2 네이티브 앱에서 연결합니다.', Illu: () => <IlluPhone dim /> },
+            { label: '워치 연결', sub: 'v2 Health Connect 필요', kind: 'watch', locked: true, lockText: '워치는 휴대폰 앱이 Health Connect 권한을 받아 걸음과 운동 데이터를 가져오는 방식으로 연결합니다.', Illu: () => <IlluWatch dim /> },
           ].map((item) => (
-            <button key={item.label} onClick={() => startPairing(item)} style={{
+            <button key={item.label} onClick={() => item.locked ? setLockedDevice({ title: item.label, description: item.lockText || '' }) : startPairing(item)} style={{
               padding: '16px', background: C.surface, borderRadius: 12,
-              border: `1px dashed ${C.border2}`, cursor: 'pointer', textAlign: 'left',
+              border: `1px dashed ${item.locked ? C.border : C.border2}`, cursor: 'pointer', textAlign: 'left',
+              opacity: item.locked ? 0.62 : 1,
               transition: 'border-color 120ms',
             }}>
               <div style={{ marginBottom: 10 }}><item.Illu /></div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 2, fontFamily: "'Pretendard', system-ui, sans-serif" }}>{item.label}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: C.muted, fontFamily: "'Pretendard', system-ui, sans-serif" }}>{item.label}</div>
+                {item.locked && <div style={{ fontSize: 9, color: C.mint, border: `1px solid ${C.border2}`, borderRadius: 5, padding: '2px 5px', fontFamily: "'JetBrains Mono', monospace" }}>v2</div>}
+              </div>
               <div style={{ fontSize: 10, color: '#3a3a3a', fontFamily: "'Pretendard', system-ui, sans-serif" }}>{item.sub}</div>
             </button>
           ))}
@@ -1162,11 +1173,33 @@ function DevicesPage() {
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => setQr(false)} style={{ flex: 1, padding: '9px 14px', borderRadius: 8, border: `1px solid ${C.border2}`, background: 'transparent', color: C.alt, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, cursor: 'pointer' }}>취소</button>
               <button onClick={copyPairingToken} style={{ flex: 1, padding: '9px 14px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.surface, color: C.muted, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>{copied ? '복사됨' : '코드 복사'}</button>
+              <button onClick={completePairing} style={{ flex: 1, padding: '9px 14px', borderRadius: 8, border: 'none', background: C.mint, color: C.ink, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>현재 기기로 테스트</button>
             </div>
           </div>
         </div>
       )}
 
+      {lockedDevice && (
+        <div onClick={() => setLockedDevice(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: C.raised, borderRadius: 20, padding: '34px', border: `1px solid ${C.border2}`, textAlign: 'left', maxWidth: 430, width: 'calc(100% - 32px)' }}>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.white, marginBottom: 8 }}>{lockedDevice.title}</div>
+            <div style={{ color: C.alt, fontSize: 12, lineHeight: 1.8, marginBottom: 18 }}>{lockedDevice.description}</div>
+            <div style={{ display: 'grid', gap: 10, marginBottom: 22 }}>
+              {[
+                'v1에서는 PC/노트북 Windows 트래커부터 실제 측정합니다.',
+                '휴대폰, 태블릿, 워치는 OS 권한이 필요한 네이티브 앱 기능으로 분리합니다.',
+                'v2 앱에서 권한 승인 후 이 계정으로 자동 기록을 전송합니다.',
+              ].map((text, index) => (
+                <div key={text} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px 14px' }}>
+                  <div style={{ width: 22, height: 22, borderRadius: 7, background: 'rgba(0,232,197,0.12)', color: C.mint, fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{index + 1}</div>
+                  <div style={{ color: C.muted, fontSize: 12, lineHeight: 1.7 }}>{text}</div>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setLockedDevice(null)} style={{ width: '100%', padding: '11px 14px', borderRadius: 10, border: 'none', background: C.mint, color: C.ink, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>확인</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1187,16 +1220,19 @@ function ResultPage() {
 
   const summaryData = data.rows.map((row) => row.focus_minutes / 60)
   const hasRows = data.rows.length > 0
-  const trackedMinutes = data.totals.pc_minutes + data.totals.focus_minutes + data.totals.development_minutes
+  const trackedMinutes = data.totals.pc_minutes + data.totals.phone_minutes + data.totals.focus_minutes + data.totals.development_minutes + data.totals.exercise_minutes
   const totalHours = Math.round(trackedMinutes / 60)
   const activityTotals = [
     { label: 'PC 사용', minutes: data.totals.pc_minutes, color: C.mint },
+    { label: '휴대폰 사용', minutes: data.totals.phone_minutes, color: C.faint },
     { label: '공부', minutes: data.totals.focus_minutes, color: C.mintBright },
     { label: '개발', minutes: data.totals.development_minutes, color: C.mint },
+    { label: '운동', minutes: data.totals.exercise_minutes, color: C.mintMuted },
   ]
   const maxActivityMinutes = Math.max(1, ...activityTotals.map((item) => item.minutes))
   const activityStats = [
     ...activityTotals.map((item) => ({ label: item.label, val: fmtMinutes(item.minutes), pct: Math.round((item.minutes / maxActivityMinutes) * 100), color: item.color })),
+    { label: '걸음', val: `${data.totals.steps.toLocaleString()}보`, pct: 0, color: C.white },
     { label: 'GitHub', val: `${data.totals.github_commits.toLocaleString()}커밋`, pct: 0, color: C.mint },
   ]
   const pct = (first: number, last: number, invert = false) => {
@@ -1204,11 +1240,11 @@ function ResultPage() {
     const good = invert ? delta <= 0 : delta >= 0
     return { delta: `${delta >= 0 ? '↑' : '↓'} ${Math.abs(delta)}%`, good }
   }
-  const pc = pct(data.first.pc_minutes, data.last.pc_minutes)
+  const phone = pct(data.first.phone_minutes, data.last.phone_minutes, true)
   const focus = pct(data.first.focus_minutes, data.last.focus_minutes)
   const dev = pct(data.first.development_minutes, data.last.development_minutes)
   const compare = [
-    { label: 'PC 사용 시간', d1: fmtMinutes(data.first.pc_minutes), d100: fmtMinutes(data.last.pc_minutes), ...pc },
+    { label: '휴대폰 사용량', d1: fmtMinutes(data.first.phone_minutes), d100: fmtMinutes(data.last.phone_minutes), ...phone },
     { label: '공부 시간', d1: fmtMinutes(data.first.focus_minutes), d100: fmtMinutes(data.last.focus_minutes), ...focus },
     { label: '개발 시간', d1: fmtMinutes(data.first.development_minutes), d100: fmtMinutes(data.last.development_minutes), ...dev },
   ]
@@ -1480,11 +1516,7 @@ function IlluGit({ dim }: { dim?: boolean }) {
 
 function AppIconMini({ name }: { name: string }) {
   const configs: Record<string, { bg: string; letter: string; color: string }> = {
-    '하루핏 웹': { bg: 'rgba(0,232,197,0.12)', letter: 'H', color: C.mint },
     'VS Code':   { bg: 'rgba(0,232,197,0.12)', letter: 'V', color: C.mint },
-    'Visual Studio': { bg: 'rgba(0,232,197,0.12)', letter: 'V', color: C.mint },
-    'Terminal':  { bg: '#1e1e1e', letter: 'T', color: C.mintMuted },
-    'JetBrains': { bg: '#1e1e1e', letter: 'J', color: C.mintMuted },
     'YouTube':   { bg: '#1e1e1e', letter: 'Y', color: '#666' },
     'Chrome':    { bg: '#1e1e1e', letter: 'C', color: '#666' },
     'Instagram': { bg: '#1e1e1e', letter: 'I', color: '#666' },
