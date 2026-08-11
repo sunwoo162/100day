@@ -80,5 +80,16 @@ jobs:
             grep -q '^GITHUB_CLIENT_ID=' .env || { echo "GITHUB_CLIENT_ID is missing"; exit 1; }
             grep -q '^GITHUB_CLIENT_SECRET=' .env || { echo "GITHUB_CLIENT_SECRET is missing"; exit 1; }
 
-            docker compose up -d --build
-            docker compose ps
+            npm ci --no-audit --fund=false
+            npm run build
+
+            if command -v pm2 >/dev/null 2>&1; then
+              pm2 delete harufit 2>/dev/null || true
+              env $(grep -v '^#' .env | xargs) pm2 start server/index.mjs --name harufit
+              pm2 save
+            else
+              echo "pm2 is missing on the server"
+              exit 1
+            fi
+
+            sudo systemctl reload nginx 2>/dev/null || true
