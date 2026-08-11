@@ -11,9 +11,7 @@ const rootDir = path.resolve(__dirname, '..')
 const distDir = path.join(rootDir, 'dist')
 const PORT = Number(process.env.API_PORT || 4000)
 const WEB_ORIGIN = process.env.WEB_ORIGIN || 'http://localhost:5173'
-const WEB_BASE_URL = process.env.WEB_BASE_URL || `${WEB_ORIGIN}/`
 const API_ORIGIN = process.env.API_ORIGIN || `http://localhost:${PORT}`
-const PUBLIC_API_BASE = process.env.PUBLIC_API_BASE || `${API_ORIGIN}/api`
 const SESSION_COOKIE = 'sid'
 const SESSION_DAYS = 30
 
@@ -195,7 +193,7 @@ function oauthConfig(provider) {
   return null
 }
 function callbackUrl(provider) {
-  return `${PUBLIC_API_BASE}/auth/${provider}/callback`
+  return `${API_ORIGIN}/api/auth/${provider}/callback`
 }
 async function exchangeCode(provider, code) {
   const config = oauthConfig(provider)
@@ -286,11 +284,11 @@ const server = http.createServer(async (req, res) => {
       const provider = authCallback[1]
       const code = url.searchParams.get('code')
       const state = url.searchParams.get('state')
-      if (!code || !state || parseCookies(req).oauth_state !== state) return redirect(res, `${WEB_BASE_URL}?auth=failed`)
+      if (!code || !state || parseCookies(req).oauth_state !== state) return redirect(res, `${WEB_ORIGIN}/?auth=failed`)
       const accessToken = await exchangeCode(provider, code)
       const user = upsertOAuthUser(await fetchOAuthProfile(provider, accessToken))
       const session = createSession(user.id)
-      return redirect(res, WEB_BASE_URL, [
+      return redirect(res, `${WEB_ORIGIN}/`, [
         sessionCookie(session.token, session.expires),
         'oauth_state=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0',
       ])
