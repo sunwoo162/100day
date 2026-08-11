@@ -33,8 +33,8 @@ Node.js 22.5 이상을 권장합니다. (`node:sqlite` 사용)
 
 ```bash
 cd C:\Users\user\Documents\100day
-npm install
-npm run dev
+pnpm install
+pnpm run dev
 ```
 
 실행 후:
@@ -87,7 +87,7 @@ docker compose up -d --build
 
 ## DB / 실제 기록 데이터
 
-`npm run dev` 또는 `npm run dev:api`를 처음 실행하면 `server/data/100days.db`가 자동 생성됩니다. DB에는 목데이터를 넣지 않고, 기본 100일 챌린지와 공부 카테고리만 준비합니다.
+`pnpm run dev` 또는 `pnpm run dev:api`를 처음 실행하면 `server/data/100days.db`가 자동 생성됩니다. DB에는 목데이터를 넣지 않고, 기본 100일 챌린지와 공부 카테고리만 준비합니다.
 
 앱에서 직접 기록하면 다음 데이터가 저장됩니다.
 
@@ -99,7 +99,7 @@ SQLite DB 파일(`server/data/*.db`)은 `.gitignore`에 포함되어 GitHub에 �
 DB를 초기화하고 실제 기록을 모두 비우려면:
 
 ```bash
-npm run db:reset
+pnpm run db:reset
 ```
 
 또는 `server/data/100days.db`를 직접 삭제한 후 서버를 다시 실행해도 됩니다. 이 경우에도 목데이터는 생성되지 않습니다.

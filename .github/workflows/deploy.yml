@@ -18,11 +18,14 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Set up pnpm
+        run: corepack enable
+
       - name: Install dependencies
-        run: npm ci --no-audit --fund=false
+        run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: npm run build
+        run: pnpm run build
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
@@ -80,8 +83,9 @@ jobs:
             grep -q '^GITHUB_CLIENT_ID=' .env || { echo "GITHUB_CLIENT_ID is missing"; exit 1; }
             grep -q '^GITHUB_CLIENT_SECRET=' .env || { echo "GITHUB_CLIENT_SECRET is missing"; exit 1; }
 
-            npm ci --no-audit --fund=false
-            npm run build
+            corepack enable
+            pnpm install --frozen-lockfile
+            pnpm run build
 
             if command -v pm2 >/dev/null 2>&1; then
               pm2 delete harufit 2>/dev/null || true
