@@ -55,7 +55,35 @@ docker compose up --build
 - Google callback: http://localhost:4000/api/auth/google/callback
 - GitHub callback: http://localhost:4000/api/auth/github/callback
 
-배포 환경에서는 `WEB_ORIGIN`, `API_ORIGIN`을 실제 HTTPS 도메인으로 설정하고, OAuth 콘솔에도 같은 callback URL을 등록합니다.
+## 학교 서버 HTTPS 배포
+
+서버에서는 `.env`의 도메인을 실제 HTTPS 주소로 맞춥니다.
+
+```env
+API_PORT=4000
+WEB_ORIGIN=https://your-domain.example
+API_ORIGIN=https://your-domain.example
+
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GITHUB_CLIENT_ID=...
+GITHUB_CLIENT_SECRET=...
+```
+
+OAuth 콘솔 callback URL도 같은 도메인으로 등록해야 합니다.
+
+```text
+Google: https://your-domain.example/api/auth/google/callback
+GitHub: https://your-domain.example/api/auth/github/callback
+```
+
+서버에서 실행:
+
+```bash
+docker compose up -d --build
+```
+
+데이터는 Docker volume `harufit-data`에 저장됩니다.
 
 ## DB / 실제 기록 데이터
 
@@ -64,8 +92,7 @@ docker compose up --build
 앱에서 직접 기록하면 다음 데이터가 저장됩니다.
 
 - 공부 기록과 사용자가 추가한 공부/오프라인 활동 카테고리
-- Daily check-in
-- 이후 수집기 연동으로 들어올 PC / Phone / Sleep / Steps / Exercise / GitHub 지표
+- 이후 수집기 연동으로 들어올 PC / Phone / Steps / Exercise / GitHub 지표
 
 SQLite DB 파일(`server/data/*.db`)은 `.gitignore`에 포함되어 GitHub에 올라가지 않습니다.
 
@@ -92,20 +119,7 @@ POST /api/study/categories
 GET  /api/focus/sessions
 GET  /api/focus/sessions?day=1
 POST /api/focus/sessions
-GET  /api/checkins
-GET  /api/checkins?day=1
-POST /api/checkins
 GET  /api/result
-```
-
-### Daily Check-in POST 예시
-
-```json
-{
-  "focus_score": 8,
-  "satisfaction_score": 7,
-  "note": "오늘 React 공부를 많이 했다."
-}
 ```
 
 ### Focus Session POST 예시
@@ -127,5 +141,5 @@ GET  /api/result
 1. Windows Desktop Tracker → PC/app usage
 2. Chrome Extension → website usage
 3. Android Companion → UsageStats
-4. Health Connect → steps/sleep/exercise/watch data
+4. Health Connect → steps/exercise/watch data
 5. GitHub OAuth/API → commit/PR activity
