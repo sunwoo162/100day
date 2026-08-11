@@ -954,6 +954,7 @@ function DevicesPage() {
   const [pendingDevice, setPendingDevice] = useState<{ kind: string; name: string; platform: string } | null>(null)
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
+  const [connectToken, setConnectToken] = useState('')
 
   const refresh = () => api.devices().then(setDevices).catch((err) => setError(err.message))
 
@@ -987,6 +988,22 @@ function DevicesPage() {
       setQr(false)
       setPairing(null)
       setPendingDevice(null)
+      await refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '기기 연결 실패')
+    }
+  }
+
+  const connectWithToken = async () => {
+    const token = connectToken.trim()
+    if (!token) {
+      setError('연결 코드를 입력하세요')
+      return
+    }
+    setError('')
+    try {
+      await api.connectDevice({ token })
+      setConnectToken('')
       await refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : '기기 연결 실패')
@@ -1086,6 +1103,47 @@ function DevicesPage() {
             </div>
           </div>
         ))}
+      </div>
+
+      <div style={{ background: C.raised, borderRadius: 14, padding: '22px', border: `1px solid ${C.border}`, marginBottom: 14 }}>
+        <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 14 }}>다른 기기 코드로 연결</div>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'stretch', flexWrap: 'wrap' }}>
+          <input
+            value={connectToken}
+            onChange={(event) => setConnectToken(event.target.value)}
+            placeholder="연결 코드 입력"
+            style={{
+              flex: '1 1 260px',
+              minWidth: 0,
+              padding: '12px 14px',
+              borderRadius: 10,
+              border: `1px solid ${C.border2}`,
+              background: C.surface,
+              color: C.white,
+              outline: 'none',
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 13,
+            }}
+          />
+          <button
+            onClick={connectWithToken}
+            style={{
+              flex: '0 0 auto',
+              padding: '0 18px',
+              minHeight: 44,
+              borderRadius: 10,
+              border: 'none',
+              background: C.mint,
+              color: C.ink,
+              fontFamily: "'Pretendard', system-ui, sans-serif",
+              fontSize: 13,
+              fontWeight: 800,
+              cursor: 'pointer',
+            }}
+          >
+            연결
+          </button>
+        </div>
       </div>
 
       <div style={{ background: C.raised, borderRadius: 14, padding: '22px', border: `1px solid ${C.border}` }}>
