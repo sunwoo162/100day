@@ -1062,7 +1062,7 @@ function DevicesPage() {
     if (pendingDevice?.kind === 'phone') {
       return {
         title: '휴대폰 연결 코드',
-        description: '휴대폰 앱에서 같은 계정 연결 화면을 열고 이 코드를 입력하면 휴대폰 사용 기록이 이 계정에 저장됩니다.',
+        description: 'Android 연동 앱에서 이 코드를 입력하고 사용정보 접근 권한을 허용하면 휴대폰 사용 기록이 이 계정에 저장됩니다.',
         command: '',
       }
     }
@@ -1145,7 +1145,7 @@ function DevicesPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
           {[
             { label: '현재 노트북 등록', sub: '이 브라우저', kind: 'computer', name: '노트북', direct: true, Illu: () => <IlluLaptop dim /> },
-            { label: '현재 휴대폰 연결', sub: '이 브라우저', kind: 'phone', name: '휴대폰', direct: true, Illu: () => <IlluPhone dim /> },
+            { label: '휴대폰 연결', sub: 'Android 사용시간 측정', kind: 'phone', name: '휴대폰 사용량 트래커', platform: 'Android Usage Access', direct: false, Illu: () => <IlluPhone dim /> },
             { label: '노트북 트래커 설치', sub: '사용 시간 측정', kind: 'computer', name: '노트북 트래커', platform: 'Windows', direct: false, Illu: () => <IlluLaptop dim /> },
             { label: '워치 연결', sub: '휴대폰 Health Connect', kind: 'watch', name: 'Health Connect', direct: false, info: true, Illu: () => <IlluWatch dim /> },
           ].map((item) => (

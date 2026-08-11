@@ -460,6 +460,27 @@ const server = http.createServer(async (req, res) => {
       return json(res, 201, { ok: true, day_number: day, minutes })
     }
 
+    if (url.pathname === '/api/track/phone' && req.method === 'POST') {
+      const device = requireDevice(req, res); if (!device) return
+      if (device.kind !== 'phone') return json(res, 403, { error: '휴대폰 기기 토큰이 필요합니다' })
+      const body = await readBody(req)
+      const minutes = Math.max(0, Math.min(240, Number(body.minutes || 0)))
+      if (!minutes) return json(res, 400, { error: 'minutes 값이 필요합니다' })
+      const appName = String(body.app_name || '휴대폰').trim().slice(0, 120) || '휴대폰'
+      const occurredAt = body.occurred_at ? new Date(body.occurred_at) : new Date()
+      const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(occurredAt)
+      const challenge = getUserChallenge(device.user_id)
+      const day = dayForDate(challenge, date)
+      ensureMetric(device.user_id, challenge, day)
+      db.prepare('UPDATE daily_metrics SET phone_minutes = phone_minutes + ? WHERE user_id = ? AND challenge_id = ? AND day_number = ?')
+        .run(minutes, device.user_id, challenge.id, day)
+      db.prepare('INSERT INTO app_usage (user_id, day_number, source, app_name, minutes) VALUES (?, ?, ?, ?, ?)')
+        .run(device.user_id, day, 'phone', appName, minutes)
+      db.prepare('UPDATE devices SET last_sync = ?, source = ? WHERE id = ?')
+        .run(new Date().toISOString(), 'android-usage-access', device.id)
+      return json(res, 201, { ok: true, day_number: day, minutes })
+    }
+
     const deleteDevice = url.pathname.match(/^\/api\/devices\/(\d+)$/)
     if (deleteDevice && req.method === 'DELETE') {
       const user = requireUser(req, res); if (!user) return

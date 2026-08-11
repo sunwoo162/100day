@@ -114,6 +114,11 @@ GET  /api/dashboard/today?day=1
 GET  /api/timeline
 GET  /api/analytics?days=30
 GET  /api/devices
+POST /api/devices/pairing
+POST /api/devices/current
+POST /api/devices/connect
+POST /api/track/pc
+POST /api/track/phone
 GET  /api/study/categories
 POST /api/study/categories
 GET  /api/focus/sessions
@@ -159,3 +164,9 @@ pnpm run tracker:windows
 ```
 
 트래커는 1분마다 현재 활성 창을 확인하고, 3분 이상 입력이 없으면 유휴 상태로 보고 기록하지 않습니다.
+
+### Android 휴대폰 사용 시간 연동
+
+휴대폰 사용 시간은 모바일 웹에서 직접 읽을 수 없습니다. Android 연동 앱이 Usage Access 권한을 받은 뒤 하루핏 연결 코드를 `/api/devices/connect`로 등록해야 합니다.
+
+등록 후 Android 앱은 발급받은 기기 토큰으로 `/api/track/phone`에 앱별 사용 시간을 전송합니다.
