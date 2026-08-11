@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
+import { api, type AnalyticsData, type AuthUser, type ChallengeData, type DashboardData, type DeviceData, type DevicePairingData, type FocusSession, type ResultData, type StudyCategory, type TimelineEntry } from './lib/api'
 
-type Page = 'dashboard' | 'timeline' | 'analytics' | 'focus' | 'devices' | 'checkin' | 'result'
+type Page = 'dashboard' | 'timeline' | 'analytics' | 'focus' | 'devices' | 'result'
 
 /* ── colour tokens ── */
 const C = {
@@ -25,24 +26,116 @@ const NAV: { id: Page; label: string; Icon: (p: { active: boolean }) => React.Re
   { id: 'dashboard', label: '개요',  Icon: ({ active }) => <IcoGrid   c={active ? C.mint : '#4a4a4a'} /> },
   { id: 'timeline',  label: '타임라인',  Icon: ({ active }) => <IcoCalendar c={active ? C.mint : '#4a4a4a'} /> },
   { id: 'analytics', label: '분석', Icon: ({ active }) => <IcoChart  c={active ? C.mint : '#4a4a4a'} /> },
-  { id: 'focus',     label: '집중',     Icon: ({ active }) => <IcoTimer  c={active ? C.mint : '#4a4a4a'} /> },
+  { id: 'focus',     label: '공부',     Icon: ({ active }) => <IcoTimer  c={active ? C.mint : '#4a4a4a'} /> },
   { id: 'devices',   label: '기기',   Icon: ({ active }) => <IcoDevice c={active ? C.mint : '#4a4a4a'} /> },
 ]
+
+function fmtMinutes(min: number) {
+  const h = Math.floor(min / 60)
+  const m = min % 60
+  if (h <= 0) return `${m}분`
+  return `${h}시간 ${String(m).padStart(2, '0')}분`
+}
+
+function fmtDelta(delta: number, unit = '분') {
+  if (delta === 0) return '어제와 같음'
+  return `어제보다 ${delta > 0 ? '+' : '-'}${Math.abs(delta).toLocaleString()}${unit}`
+}
+
+function parseHourValue(display: string) {
+  const hours = display.match(/(\d+)h/)?.[1] ?? '0'
+  const mins = display.match(/(\d+)m/)?.[1] ?? '0'
+  return `${Number(hours)}시간 ${String(Number(mins)).padStart(2, '0')}분`
+}
+
+function shortTime(iso: string | null) {
+  if (!iso) return '아직 없음'
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return '알 수 없음'
+  const diff = Math.max(0, Date.now() - date.getTime())
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return '방금 전'
+  if (mins < 60) return `${mins}분 전`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}시간 전`
+  return `${Math.floor(hours / 24)}일 전`
+}
+
+function LoadingBlock({ label = '데이터를 불러오는 중입니다' }: { label?: string }) {
+  return <div style={{ padding: 36, color: C.alt, fontSize: 13 }}>{label}</div>
+}
+
+function ErrorBlock({ message }: { message: string }) {
+  return <div style={{ padding: 36, color: C.mintMuted, fontSize: 13 }}>{message}</div>
+}
+
+function LoginPage() {
+  const login = (provider: 'github' | 'google') => {
+    window.location.href = `/api/auth/${provider}`
+  }
+
+  return (
+    <div style={{ minHeight: '100vh', background: C.canvas, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Pretendard', system-ui, sans-serif", padding: 24 }}>
+      <div style={{ width: '100%', maxWidth: 420, background: C.raised, border: `1px solid ${C.border}`, borderRadius: 16, padding: 34, boxShadow: '0 24px 80px rgba(0,0,0,0.28)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 30 }}>
+          <LogoMark />
+          <div>
+            <div style={{ fontSize: 26, fontWeight: 900, color: C.white, letterSpacing: '-0.02em', lineHeight: 1 }}>하루핏</div>
+          </div>
+        </div>
+        <button onClick={() => login('github')} style={{ width: '100%', padding: '13px 16px', borderRadius: 10, border: '1px solid #30363d', background: '#24292f', color: C.white, cursor: 'pointer', fontSize: 13, fontWeight: 800, marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+          <IcoGitHubBrand />
+          <span>GitHub로 계속하기</span>
+        </button>
+        <button onClick={() => login('google')} style={{ width: '100%', padding: '13px 16px', borderRadius: 10, border: '1px solid #dadce0', background: '#ffffff', color: '#202124', cursor: 'pointer', fontSize: 13, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+          <IcoGoogleBrand />
+          <span>Google로 계속하기</span>
+        </button>
+      </div>
+    </div>
+  )
+}
 
 export default function App() {
   const [page, setPage] = useState<Page>('dashboard')
   const [menuOpen, setMenuOpen] = useState(false)
+  const [challenge, setChallenge] = useState<ChallengeData | null>(null)
+  const [user, setUser] = useState<AuthUser | null>(null)
+  const [authLoading, setAuthLoading] = useState(true)
+
+  useEffect(() => {
+    api.me()
+      .then(({ user }) => setUser(user))
+      .catch(() => setUser(null))
+      .finally(() => setAuthLoading(false))
+  }, [])
+
+  useEffect(() => {
+    if (!user) return
+    api.challenge().then(setChallenge).catch(() => setChallenge(null))
+  }, [user])
+
+  const logout = async () => {
+    await api.logout().catch(() => {})
+    setUser(null)
+    setChallenge(null)
+    setPage('dashboard')
+  }
+
+  if (authLoading) return <LoadingBlock label="로그인 상태를 확인하는 중입니다" />
+  if (!user) return <LoginPage />
+
+  const currentDay = challenge?.currentDay ?? 1
   return (
     <div style={{ display: 'flex', height: '100vh', background: C.canvas, overflow: 'hidden', fontFamily: "'Pretendard', system-ui, sans-serif" }}>
-      <Sidebar page={page} setPage={setPage} open={menuOpen} setOpen={setMenuOpen} />
+      <Sidebar page={page} setPage={setPage} open={menuOpen} setOpen={setMenuOpen} currentDay={currentDay} user={user} onLogout={logout} />
       <main style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }} className="scrollbar-none">
         <MobileTopbar page={page} onMenu={() => setMenuOpen(true)} />
-        {page === 'dashboard' && <DashboardPage setPage={setPage} />}
-        {page === 'timeline'  && <TimelinePage />}
+        {page === 'dashboard' && <DashboardPage setPage={setPage} currentDay={currentDay} />}
+        {page === 'timeline'  && <TimelinePage currentDay={currentDay} />}
         {page === 'analytics' && <AnalyticsPage />}
-        {page === 'focus'     && <FocusPage />}
+        {page === 'focus'     && <FocusPage currentDay={currentDay} />}
         {page === 'devices'   && <DevicesPage />}
-        {page === 'checkin'   && <CheckinPage setPage={setPage} />}
         {page === 'result'    && <ResultPage />}
       </main>
       {menuOpen && <div onClick={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', zIndex: 39 }} />}
@@ -53,7 +146,7 @@ export default function App() {
 /* ═══════════════════════════════════════════════
    SIDEBAR
 ═══════════════════════════════════════════════ */
-function Sidebar({ page, setPage, open, setOpen }: { page: Page; setPage: (p: Page) => void; open: boolean; setOpen: (v: boolean) => void }) {
+function Sidebar({ page, setPage, open, setOpen, currentDay, user, onLogout }: { page: Page; setPage: (p: Page) => void; open: boolean; setOpen: (v: boolean) => void; currentDay: number; user: AuthUser; onLogout: () => void }) {
   return (
     <aside data-open={open} style={{
       width: 210, minWidth: 210, background: C.surface,
@@ -65,13 +158,13 @@ function Sidebar({ page, setPage, open, setOpen }: { page: Page; setPage: (p: Pa
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <LogoMark />
           <div>
-            <div style={{ fontSize: 13, fontWeight: 900, color: C.white, letterSpacing: '0.08em' }}>100 DAYS</div>
-            <div style={{ fontSize: 10, color: C.alt, fontFamily: "'JetBrains Mono', monospace", marginTop: 1 }}>37일차 / 100</div>
+            <div style={{ fontSize: 13, fontWeight: 900, color: C.white, letterSpacing: '0.08em' }}>하루핏</div>
+            <div style={{ fontSize: 10, color: C.alt, fontFamily: "'JetBrains Mono', monospace", marginTop: 1 }}>{currentDay}일차 / 100</div>
           </div>
         </div>
         {/* mini progress */}
         <div style={{ marginTop: 14, height: 2, background: C.border2, borderRadius: 1 }}>
-          <div style={{ width: '37%', height: '100%', background: C.mint, borderRadius: 1 }} />
+          <div style={{ width: `${currentDay}%`, height: '100%', background: C.mint, borderRadius: 1 }} />
         </div>
       </div>
 
@@ -87,13 +180,21 @@ function Sidebar({ page, setPage, open, setOpen }: { page: Page; setPage: (p: Pa
 
       {/* Bottom */}
       <div style={{ padding: '10px 10px 24px', borderTop: `1px solid ${C.border}` }}>
-        <NavBtn active={page === 'checkin'} onClick={() => { setPage('checkin'); setOpen(false) }}>
-          <IcoCheck c={page === 'checkin' ? C.mint : '#4a4a4a'} />
-          <span>오늘 체크인</span>
-        </NavBtn>
+        <div style={{ padding: '8px 10px 14px', marginBottom: 8, borderBottom: `1px solid ${C.border}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            {user.avatarUrl ? <img src={user.avatarUrl} alt="" style={{ width: 24, height: 24, borderRadius: '50%' }} /> : <div style={{ width: 24, height: 24, borderRadius: '50%', background: C.chip }} />}
+            <div style={{ minWidth: 0 }}>
+              <div style={{ color: C.white, fontSize: 11, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.name}</div>
+              <div style={{ color: C.alt, fontSize: 9, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email || 'OAuth 계정'}</div>
+            </div>
+          </div>
+          <button onClick={onLogout} style={{ width: '100%', padding: '6px 8px', borderRadius: 7, border: `1px solid ${C.border2}`, background: 'transparent', color: C.alt, cursor: 'pointer', fontSize: 11 }}>
+            로그아웃
+          </button>
+        </div>
         <NavBtn active={page === 'result'} onClick={() => { setPage('result'); setOpen(false) }}>
           <IcoTrophy c={page === 'result' ? C.mint : '#4a4a4a'} />
-          <span>100일 결과</span>
+          <span>백일 결과</span>
         </NavBtn>
       </div>
     </aside>
@@ -117,7 +218,7 @@ function NavBtn({ active, onClick, children }: { active: boolean; onClick: () =>
 }
 
 function MobileTopbar({ page, onMenu }: { page: Page; onMenu: () => void }) {
-  const titles: Record<Page, string> = { dashboard: '개요', timeline: '타임라인', analytics: '분석', focus: '집중', devices: '기기', checkin: '오늘 체크인', result: '100일 결과' }
+  const titles: Record<Page, string> = { dashboard: '개요', timeline: '타임라인', analytics: '분석', focus: '공부', devices: '기기', result: '백일 결과' }
   return (
     <div className="mobile-header" style={{ display: 'none', padding: '14px 20px', borderBottom: `1px solid ${C.border}`, background: C.surface, alignItems: 'center', gap: 12 }}>
       <button onClick={onMenu} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}><IcoMenu c={C.muted} /></button>
@@ -129,69 +230,82 @@ function MobileTopbar({ page, onMenu }: { page: Page; onMenu: () => void }) {
 /* ═══════════════════════════════════════════════
    DASHBOARD
 ═══════════════════════════════════════════════ */
-function DashboardPage({ setPage }: { setPage: (p: Page) => void }) {
-  const spark7 = [4.1, 5.2, 6.3, 5.8, 7.1, 6.4, 6.2]
-  const spark7b = [5.3, 4.8, 5.6, 6.1, 4.9, 5.0, 4.1]
-  const spark7c = [1.8, 2.4, 2.1, 3.2, 2.9, 3.1, 3.3]
-  const spark7d = [7.5, 6.8, 7.2, 5.9, 7.1, 6.5, 6.7]
-  const spark7e = [6200, 7400, 5800, 8100, 7900, 6700, 8421]
-  const spark7f = [20, 35, 0, 42, 27, 60, 27]
-  const spark7g = [1.2, 1.8, 2.1, 2.4, 2.0, 2.3, 2.5]
-  const spark7h = [2, 4, 5, 6, 3, 8, 7]
+function DashboardPage({ setPage, currentDay }: { setPage: (p: Page) => void; currentDay: number }) {
+  const [data, setData] = useState<DashboardData | null>(null)
+  const [error, setError] = useState('')
 
+  useEffect(() => {
+    api.dashboard(currentDay).then(setData).catch((err) => setError(err.message))
+  }, [currentDay])
+
+  if (error) return <ErrorBlock message={error} />
+  if (!data) return <LoadingBlock />
+
+  const m = data.metrics
+  const recent = data.recent ?? []
+  const hasRecent = recent.length > 0
+  const spark = {
+    pc: recent.map((row) => row.pc_minutes / 60),
+    phone: recent.map((row) => row.phone_minutes / 60),
+    focus: recent.map((row) => row.focus_minutes / 60),
+    steps: recent.map((row) => row.steps),
+    exercise: recent.map((row) => row.exercise_minutes),
+    development: recent.map((row) => row.development_minutes / 60),
+    github: recent.map((row) => row.github_commits),
+  }
   const stats = [
-    { id: 'pc',    label: 'PC',           value: '6시간 21분', sub: '어제보다 +24분', up: true,  spark: spark7,  unit: 'h', max: 10, color: C.mint },
-    { id: 'phone', label: '휴대폰',        value: '4시간 13분', sub: '어제보다 -32분', up: false, spark: spark7b, unit: 'h', max: 10, color: C.faint },
-    { id: 'focus', label: '집중',        value: '3시간 17분', sub: '어제보다 +41분', up: true,  spark: spark7c, unit: 'h', max: 5,  color: C.mint },
-    { id: 'sleep', label: '수면',        value: '6시간 42분', sub: '어제보다 -18분', up: false, spark: spark7d, unit: 'h', max: 9,  color: C.mintMuted },
-    { id: 'steps', label: '걸음',        value: '8,421',  sub: '어제보다 +1,203', up: true, spark: spark7e, unit: 'k', max: 12000, color: C.mint },
-    { id: 'ex',    label: '운동',     value: '27분', sub: '어제와 같음', up: true, spark: spark7f, unit: 'm', max: 90, color: C.mintMuted },
-    { id: 'dev',   label: '개발',  value: '2시간 31분', sub: '어제보다 +12분', up: true,  spark: spark7g, unit: 'h', max: 5,  color: C.mintBright },
-    { id: 'git',   label: 'GitHub',       value: '커밋 7개', sub: '어제보다 +3', up: true,  spark: spark7h, unit: '',  max: 12, color: C.mint },
+    { id: 'pc', label: 'PC', value: parseHourValue(m.pc.display || '0h 00m'), sub: fmtDelta(m.pc.delta), up: m.pc.delta >= 0, spark: spark.pc, max: 10, color: C.mint },
+    { id: 'phone', label: '휴대폰', value: parseHourValue(m.phone.display || '0h 00m'), sub: fmtDelta(m.phone.delta), up: m.phone.delta <= 0, spark: spark.phone, max: 10, color: C.faint },
+    { id: 'focus', label: '공부', value: parseHourValue(m.focus.display || '0h 00m'), sub: fmtDelta(m.focus.delta), up: m.focus.delta >= 0, spark: spark.focus, max: 5, color: C.mint },
+    { id: 'steps', label: '걸음', value: (m.steps.value || 0).toLocaleString(), sub: fmtDelta(m.steps.delta, ''), up: m.steps.delta >= 0, spark: spark.steps, max: 12000, color: C.mint },
+    { id: 'ex', label: '운동', value: fmtMinutes(m.exercise.minutes || 0), sub: fmtDelta(m.exercise.delta), up: m.exercise.delta >= 0, spark: spark.exercise, max: 90, color: C.mintMuted },
+    { id: 'dev', label: '개발', value: parseHourValue(m.development.display || '0h 00m'), sub: fmtDelta(m.development.delta), up: m.development.delta >= 0, spark: spark.development, max: 5, color: C.mintBright },
+    { id: 'git', label: 'GitHub', value: `커밋 ${m.github.commits || 0}개`, sub: fmtDelta(m.github.delta, ''), up: m.github.delta >= 0, spark: spark.github, max: 12, color: C.mint },
   ]
 
-  const timeline = [
-    { time: '07:10', label: '기상',        dot: C.mintMuted },
-    { time: '08:00', label: '학교',          dot: '#3a3a3a' },
-    { time: '16:21', label: 'VS Code',         dot: C.mint },
-    { time: '18:03', label: 'YouTube',         dot: '#3a3a3a' },
-    { time: '19:32', label: '집중 세션',   dot: C.mintBright },
-    { time: '22:14', label: 'GitHub 커밋',   dot: C.mint },
-    { time: '01:12', label: '수면',           dot: '#2a2a2a' },
-  ]
+  const maxAppMinutes = Math.max(1, ...data.apps.map((app) => app.minutes))
+  const apps = data.apps.map((app, i) => ({
+    name: app.name,
+    dur: fmtMinutes(app.minutes),
+    pct: Math.round((app.minutes / maxAppMinutes) * 100),
+    color: i === 0 ? C.mint : '#2e2e2e',
+  }))
+  const timeline = data.events.map((event) => ({
+    time: event.time,
+    label: event.label
+      .replace('Wake up', '기상')
+      .replace('School', '학교')
+      .replace('Focus Session', '집중 세션')
+      .replace('GitHub Commit', 'GitHub 커밋')
+      .replace('Sleep', '휴식'),
+    dot: event.type === 'development' ? C.mint : event.type === 'focus' ? C.mintBright : event.type === 'health' ? C.mintMuted : '#3a3a3a',
+  }))
 
-  const apps = [
-    { name: 'VS Code',    dur: '2시간 31분', pct: 100, color: C.mint },
-    { name: 'YouTube',    dur: '1시간 21분', pct: 54,  color: '#2e2e2e' },
-    { name: 'Chrome',     dur: '57분',    pct: 38,  color: '#2e2e2e' },
-    { name: 'Instagram',  dur: '48분',    pct: 32,  color: '#2e2e2e' },
-    { name: 'Discord',    dur: '31분',    pct: 20,  color: '#2e2e2e' },
-  ]
-
-  /* device ring data: laptop=6h21, phone=4h13, watch=active all day */
-  const deviceTotal = 6.35 + 4.22 + 8.67
-  const devPcts = [6.35 / deviceTotal, 4.22 / deviceTotal, 8.67 / deviceTotal]
+  const pcMinutes = m.pc.minutes ?? 0
+  const phoneMinutes = m.phone.minutes ?? 0
+  const deviceTotal = pcMinutes + phoneMinutes
+  const devPcts = deviceTotal > 0 ? [pcMinutes / deviceTotal, phoneMinutes / deviceTotal] : [0, 0]
 
   return (
     <div style={{ padding: '32px 36px', maxWidth: 1080 }}>
       {/* Header */}
       <div style={{ marginBottom: 36 }}>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 12 }}>
-          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.alt, letterSpacing: '0.12em' }}>2025.03.09 · 일</span>
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.alt, letterSpacing: '0.12em' }}>{data.date}</span>
           <span style={{ width: 3, height: 3, borderRadius: '50%', background: C.border2, display: 'inline-block' }} />
-          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.faint }}>100일 중 37일차</span>
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.faint }}>100일 중 {data.day}일차</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 68, fontWeight: 900, color: C.white, lineHeight: 1, letterSpacing: '-0.03em' }}>37일차</span>
+          <span style={{ fontSize: 68, fontWeight: 900, color: C.white, lineHeight: 1, letterSpacing: '-0.03em' }}>{data.day}일차</span>
           <div style={{ paddingBottom: 8 }}>
-            <ProgressRing pct={37} size={52} stroke={3} color={C.mint} trackColor={C.border2} label="37%" />
+            <ProgressRing pct={data.day} size={52} stroke={3} color={C.mint} trackColor={C.border2} label={`${data.day}%`} />
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
           <div style={{ flex: 1, maxWidth: 360, height: 2, background: C.border2, borderRadius: 1 }}>
-            <div style={{ width: '37%', height: '100%', background: C.mint, borderRadius: 1 }} />
+            <div style={{ width: `${data.day}%`, height: '100%', background: C.mint, borderRadius: 1 }} />
           </div>
-          <span style={{ fontSize: 11, color: C.alt }}>63일 남음</span>
+          <span style={{ fontSize: 11, color: C.alt }}>{100 - data.day}일 남음</span>
         </div>
       </div>
 
@@ -199,10 +313,10 @@ function DashboardPage({ setPage }: { setPage: (p: Page) => void }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 28 }}>
         {stats.map((s) => (
           <div key={s.id} style={{ background: C.raised, borderRadius: 14, padding: '18px 18px 14px', border: `1px solid ${C.border}` }}>
-            <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 10 }}>{s.label.toUpperCase()}</div>
+            <div style={{ fontSize: 11, color: C.soft, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 10, fontWeight: 700 }}>{s.label.toUpperCase()}</div>
             <div style={{ fontSize: 22, fontWeight: 800, color: C.white, letterSpacing: '-0.02em', marginBottom: 4, lineHeight: 1 }}>{s.value}</div>
             <div style={{ fontSize: 10, color: s.up ? C.mintMuted : C.faint, marginBottom: 12 }}>{s.sub}</div>
-            <Sparkline data={s.spark} color={s.color} max={s.max} />
+            {hasRecent ? <Sparkline data={s.spark} color={s.color} max={s.max} /> : <EmptyChart height={28} />}
           </div>
         ))}
       </div>
@@ -211,18 +325,17 @@ function DashboardPage({ setPage }: { setPage: (p: Page) => void }) {
       <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr 1fr', gap: 16 }}>
         {/* Device ring */}
         <div style={{ background: C.raised, borderRadius: 14, padding: '20px', border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 16, alignSelf: 'flex-start' }}>기기</div>
+          <div style={{ fontSize: 11, color: C.soft, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 16, alignSelf: 'flex-start', fontWeight: 700 }}>기기</div>
           <DeviceRing pcts={devPcts} />
           <div style={{ marginTop: 18, width: '100%' }}>
             {[
-              { label: '노트북', val: '6시간 21분', color: C.mint },
-              { label: '휴대폰',  val: '4시간 13분', color: C.mintMuted },
-              { label: '워치',  val: '8시간 40분', color: '#333' },
+              { label: '노트북', val: parseHourValue(m.pc.display || '0h 00m'), color: C.mint },
+              { label: '휴대폰',  val: parseHourValue(m.phone.display || '0h 00m'), color: C.mintMuted },
             ].map((d) => (
               <div key={d.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 9 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                   <div style={{ width: 6, height: 6, borderRadius: 1, background: d.color }} />
-                  <span style={{ fontSize: 11, color: C.alt }}>{d.label}</span>
+                  <span style={{ fontSize: 12, color: C.muted, fontWeight: 600 }}>{d.label}</span>
                 </div>
                 <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.muted }}>{d.val}</span>
               </div>
@@ -232,7 +345,7 @@ function DashboardPage({ setPage }: { setPage: (p: Page) => void }) {
 
         {/* Timeline */}
         <div style={{ background: C.raised, borderRadius: 14, padding: '20px', border: `1px solid ${C.border}` }}>
-          <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 18 }}>오늘 타임라인</div>
+          <div style={{ fontSize: 11, color: C.soft, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 18, fontWeight: 700 }}>오늘 타임라인</div>
           <div style={{ position: 'relative', paddingLeft: 60 }}>
             <div style={{ position: 'absolute', left: 42, top: 4, bottom: 4, width: 1, background: C.border }} />
             {timeline.map((t, i) => (
@@ -247,7 +360,7 @@ function DashboardPage({ setPage }: { setPage: (p: Page) => void }) {
 
         {/* App usage */}
         <div style={{ background: C.raised, borderRadius: 14, padding: '20px', border: `1px solid ${C.border}` }}>
-          <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 18 }}>앱 사용량</div>
+          <div style={{ fontSize: 11, color: C.soft, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 18, fontWeight: 700 }}>앱 사용량</div>
           {apps.map((a, i) => (
             <div key={a.name} style={{ marginBottom: 14 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
@@ -265,13 +378,13 @@ function DashboardPage({ setPage }: { setPage: (p: Page) => void }) {
         </div>
       </div>
 
-      {/* Check-in CTA */}
+      {/* Study CTA */}
       <div style={{ marginTop: 16, background: 'linear-gradient(135deg, rgba(0,232,197,0.06) 0%, rgba(0,232,197,0.02) 100%)', borderRadius: 14, padding: '18px 24px', border: `1px solid rgba(0,232,197,0.12)`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 2 }}>오늘 체크인</div>
-          <div style={{ fontSize: 11, color: C.alt }}>집중도와 만족도를 기록하세요. 30초면 됩니다</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 2 }}>공부 기록</div>
+          <div style={{ fontSize: 11, color: C.alt }}>노트북/휴대폰 없이 하는 일을 타이머로 저장하세요.</div>
         </div>
-        <button onClick={() => setPage('checkin')} style={{ padding: '9px 20px', borderRadius: 50, background: C.mint, color: C.ink, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, fontWeight: 700, border: 'none', cursor: 'pointer', letterSpacing: '0.04em' }}>
+        <button onClick={() => setPage('focus')} style={{ padding: '9px 20px', borderRadius: 50, background: C.mint, color: C.ink, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, fontWeight: 700, border: 'none', cursor: 'pointer', letterSpacing: '0.04em' }}>
           Start →
         </button>
       </div>
@@ -282,58 +395,79 @@ function DashboardPage({ setPage }: { setPage: (p: Page) => void }) {
 /* ═══════════════════════════════════════════════
    TIMELINE PAGE
 ═══════════════════════════════════════════════ */
-function TimelinePage() {
-  const [sel, setSel] = useState(37)
+function TimelinePage({ currentDay }: { currentDay: number }) {
+  const [sel, setSel] = useState(currentDay)
+  const [rows, setRows] = useState<TimelineEntry[]>([])
+  const [error, setError] = useState('')
 
-  type DayEntry = { pc: string; phone: string; focus: string; sleep: string; steps: string; focusScore: number; sat: number; note: string; commits: number }
-  const db: Record<number, DayEntry> = {
-    1:  { pc: '4시간 20분', phone: '6시간 21분', focus: '42분',    sleep: '5시간 48분', steps: '3,120', focusScore: 3, sat: 4, note: '챌린지 첫날. 기대되면서도 어색하다.', commits: 2 },
-    23: { pc: '7시간 12분', phone: '5시간 03분', focus: '1시간 44분', sleep: '5시간 51분', steps: '4,231', focusScore: 5, sat: 6, note: '오늘은 집중이 잘 안 됐다. 내일은 더 잘 할 수 있을 것 같다.', commits: 4 },
-    37: { pc: '6시간 21분', phone: '4시간 13분', focus: '3시간 17분', sleep: '6시간 42분', steps: '8,421', focusScore: 8, sat: 7, note: 'VS Code에서 꽤 오래 작업했다. 집중이 잘 됐다.', commits: 7 },
+  useEffect(() => {
+    api.timeline().then(setRows).catch((err) => setError(err.message))
+  }, [])
+
+  useEffect(() => {
+    setSel(currentDay)
+  }, [currentDay])
+
+  const completedDays = currentDay
+  const d = rows.find((row) => row.day_number === sel) ?? rows[0]
+  const rowByDay = new Map(rows.map((row) => [row.day_number, row]))
+  const usageMinutes = (row?: TimelineEntry) => row ? row.pc_minutes + row.phone_minutes + row.focus_minutes + row.development_minutes + row.exercise_minutes : 0
+  const maxUsageMinutes = Math.max(1, ...rows.map((row) => usageMinutes(row)))
+  const heatColor = (minutes: number, future: boolean, today: boolean, selected: boolean) => {
+    if (future) return '#111'
+    if (minutes <= 0) return '#141414'
+    const ratio = minutes / maxUsageMinutes
+    if (today) return C.mint
+    if (ratio >= 0.75) return '#00e8c5'
+    if (ratio >= 0.5) return '#00bfa5'
+    if (ratio >= 0.25) return '#087d70'
+    return '#15524d'
   }
-  const d: DayEntry = db[sel] ?? { pc: '5시간 30분', phone: '4시간 10분', focus: '2시간 00분', sleep: '7시간 00분', steps: '6,200', focusScore: 6, sat: 6, note: '평범하지만 꾸준한 하루.', commits: 3 }
+  if (error) return <ErrorBlock message={error} />
 
   return (
     <div style={{ padding: '32px 36px' }}>
       <div style={{ marginBottom: 28 }}>
-        <div style={{ fontSize: 44, fontWeight: 900, color: C.white, letterSpacing: '-0.03em', lineHeight: 1 }}>100 DAYS</div>
+        <div style={{ fontSize: 44, fontWeight: 900, color: C.white, letterSpacing: '-0.03em', lineHeight: 1 }}>하루핏</div>
         <div style={{ display: 'flex', gap: 20, marginTop: 8 }}>
-          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: C.mint }}>37일 완료</span>
-          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: C.alt }}>63일 남음</span>
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: C.mint }}>{completedDays}일 완료</span>
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: C.alt }}>{100 - completedDays}일 남음</span>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 20 }}>
+      <div className="timeline-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 20 }}>
         {/* Grid */}
         <div style={{ background: C.raised, borderRadius: 14, padding: '24px', border: `1px solid ${C.border}` }}>
           <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 16 }}>전체 날짜</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: 6 }}>
             {Array.from({ length: 100 }, (_, i) => i + 1).map((n) => {
-              const done = n < 37
-              const today = n === 37
-              const future = n > 37
+              const row = rowByDay.get(n)
+              const minutes = usageMinutes(row)
+              const today = n === completedDays
+              const future = n > completedDays
+              const selected = sel === n
               return (
                 <button key={n} onClick={() => !future && setSel(n)} style={{
                   aspectRatio: '1', borderRadius: 6, border: 'none',
                   cursor: future ? 'default' : 'pointer',
-                  background: today ? C.mint : sel === n && !today ? C.chip : done ? '#1e1e1e' : '#111',
-                  color: today ? C.ink : done ? C.muted : '#2e2e2e',
-                  fontSize: 10, fontFamily: "'JetBrains Mono', monospace",
+                  background: heatColor(minutes, future, today, selected),
+                  color: future ? '#4a4a4a' : minutes > 0 && today ? C.ink : minutes > 0 ? C.white : C.faint,
+                  fontSize: 11, fontFamily: "'JetBrains Mono', monospace",
                   fontWeight: today ? 700 : 400,
                   opacity: future ? 0.3 : 1,
-                  outline: sel === n && !today ? `1px solid ${C.mint}` : 'none',
+                  outline: selected && !today ? `1px solid ${C.mint}` : 'none',
                   outlineOffset: 1,
                   transition: 'all 100ms', padding: 0,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
+                }} title={`${n}일차 · ${fmtMinutes(minutes)}`}>
                   {n}
                 </button>
               )
             })}
           </div>
           {/* legend */}
-          <div style={{ display: 'flex', gap: 16, marginTop: 16 }}>
-            {[{ col: C.mint, lbl: '오늘' }, { col: '#1e1e1e', lbl: '완료' }, { col: '#111', lbl: '예정' }].map(l => (
+          <div style={{ display: 'flex', gap: 14, marginTop: 16, flexWrap: 'wrap' }}>
+            {[{ col: '#141414', lbl: '기록 없음' }, { col: '#15524d', lbl: '적음' }, { col: '#087d70', lbl: '보통' }, { col: '#00bfa5', lbl: '많음' }, { col: C.mint, lbl: '최대/오늘' }].map(l => (
               <div key={l.lbl} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <div style={{ width: 8, height: 8, borderRadius: 2, background: l.col }} />
                 <span style={{ fontSize: 10, color: C.alt }}>{l.lbl}</span>
@@ -347,46 +481,23 @@ function TimelinePage() {
           <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 4 }}>선택한 날짜</div>
           <div style={{ fontSize: 34, fontWeight: 900, color: C.white, letterSpacing: '-0.03em', marginBottom: 18 }}>{sel}일차</div>
 
-          {[['PC', d.pc], ['휴대폰', d.phone], ['집중', d.focus], ['수면', d.sleep], ['걸음', d.steps]].map(([k, v]) => (
+          {d ? [['총 사용 시간', fmtMinutes(usageMinutes(d))], ['PC', fmtMinutes(d.pc_minutes)], ['휴대폰', fmtMinutes(d.phone_minutes)], ['공부', fmtMinutes(d.focus_minutes)], ['걸음', d.steps.toLocaleString()]].map(([k, v]) => (
             <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 0', borderBottom: `1px solid ${C.border}` }}>
-              <span style={{ fontSize: 11, color: C.alt }}>{k}</span>
+              <span style={{ fontSize: 12, color: C.muted, fontWeight: 600 }}>{k}</span>
               <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: C.muted }}>{v}</span>
             </div>
-          ))}
-
-          <div style={{ marginTop: 16, marginBottom: 12 }}>
-            <DotScore label="Focus" value={d.focusScore} color={C.mint} />
-            <DotScore label="Satisfaction" value={d.sat} color={C.mintMuted} />
-          </div>
+          )) : <div style={{ fontSize: 12, color: C.alt, padding: '12px 0' }}>아직 저장된 기록이 없습니다.</div>}
 
           {/* GitHub mini heatrow */}
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 6 }}>커밋</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <CommitPips count={d.commits} />
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: C.mint }}>{d.commits}</span>
+              <CommitPips count={d?.github_commits ?? 0} />
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: C.mint }}>{d?.github_commits ?? 0}</span>
             </div>
           </div>
 
-          <div style={{ background: C.surface, borderRadius: 10, padding: '12px 14px' }}>
-            <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 6 }}>메모</div>
-            <p style={{ fontSize: 12, color: C.muted, margin: 0, lineHeight: 1.7 }}>{d.note}</p>
-          </div>
         </div>
-      </div>
-    </div>
-  )
-}
-
-function DotScore({ label, value, color }: { label: string; value: number; color: string }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-      <span style={{ fontSize: 11, color: C.alt }}>{label}</span>
-      <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
-        {Array.from({ length: 10 }, (_, i) => (
-          <div key={i} style={{ width: 7, height: 7, borderRadius: 1, background: i < value ? color : C.border2, transition: 'background 120ms' }} />
-        ))}
-        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.alt, marginLeft: 4 }}>{value}</span>
       </div>
     </div>
   )
@@ -407,30 +518,34 @@ function CommitPips({ count }: { count: number }) {
 ═══════════════════════════════════════════════ */
 function AnalyticsPage() {
   const [period, setPeriod] = useState<'7' | '30' | '100'>('30')
+  const [data, setData] = useState<AnalyticsData | null>(null)
+  const [error, setError] = useState('')
 
-  const screenPc    = [5.2, 7.8, 6.4, 8.1, 6.7, 4.2, 6.2, 5.9, 7.3, 6.8, 7.1, 5.4, 6.6, 7.2]
-  const screenPhone = [4.8, 5.3, 4.6, 4.9, 5.5, 6.8, 4.1, 4.4, 5.1, 4.7, 5.0, 3.8, 4.3, 4.1]
-  const sleepData   = [7.2, 6.8, 7.5, 6.2, 7.8, 8.1, 6.4, 7.0, 6.9, 7.3, 6.7, 7.8, 8.0, 6.5]
-  const focusData   = [2.1, 3.4, 1.8, 4.2, 3.1, 2.7, 3.8, 4.1, 2.4, 3.6, 2.9, 4.4, 3.2, 2.8]
-  const stepsData   = [6200, 7400, 5800, 8100, 7900, 6700, 8421, 5900, 7200, 8800, 6100, 7700, 8300, 6900]
+  useEffect(() => {
+    api.analytics(Number(period)).then(setData).catch((err) => setError(err.message))
+  }, [period])
 
-  /* github heatmap — 37 days, 0-8 commits */
-  const ghData = Array.from({ length: 37 }, (_, i) => Math.floor(Math.abs(Math.sin(i * 0.7) * 8)))
+  if (error) return <ErrorBlock message={error} />
+  if (!data) return <LoadingBlock />
 
-  const insights = [
-    { icon: '↑', text: '7시간 이상 자면 집중도가 24% 더 좋아집니다.' },
-    { icon: '★', text: '가장 생산적인 요일은 화요일입니다.' },
-    { icon: '↓', text: '37일 동안 평균 휴대폰 사용량이 18% 줄었습니다.' },
-    { icon: '↑', text: '처음 10일 대비 VS Code 사용량이 31% 늘었습니다.' },
-  ]
+  const rows = data.rows
+  const hasRows = rows.length > 0
+  const screenPc = rows.map((row) => row.pc_minutes / 60)
+  const screenPhone = rows.map((row) => row.phone_minutes / 60)
+  const focusData = rows.map((row) => row.focus_minutes / 60)
+  const stepsData = rows.map((row) => row.steps)
+  const ghData = rows.map((row) => row.github_commits)
+  const avg = (arr: number[]) => arr.length ? arr.reduce((a, v) => a + v, 0) / arr.length : 0
 
-  const apps = [
-    { name: 'VS Code',   pct: 100, hours: 81, color: C.mint },
-    { name: 'YouTube',   pct: 53,  hours: 43, color: '#2a2a2a' },
-    { name: 'Chrome',    pct: 38,  hours: 31, color: '#2a2a2a' },
-    { name: 'Instagram', pct: 32,  hours: 26, color: '#2a2a2a' },
-    { name: 'Discord',   pct: 22,  hours: 18, color: '#2a2a2a' },
-  ]
+  const insights = buildInsights(rows)
+
+  const maxAppMinutes = Math.max(1, ...data.topApps.map((app) => app.minutes))
+  const apps = data.topApps.map((app, i) => ({
+    name: app.name,
+    pct: Math.round((app.minutes / maxAppMinutes) * 100),
+    hours: Math.round(app.minutes / 60),
+    color: i === 0 ? C.mint : '#2a2a2a',
+  }))
 
   return (
     <div style={{ padding: '32px 36px' }}>
@@ -459,47 +574,38 @@ function AnalyticsPage() {
             <Legend color={C.mint} label="PC" />
             <Legend color="#3a3a3a" label="휴대폰" />
           </div>
-          <DualLineChart a={screenPc} b={screenPhone} maxVal={10} colorA={C.mint} colorB="#4a4a4a" h={90} />
-        </ChartCard>
-
-        {/* Sleep */}
-        <ChartCard title="수면" subtitle="시간 / 밤">
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12 }}>
-            <span style={{ fontSize: 26, fontWeight: 800, color: C.white }}>7.1시간</span>
-            <span style={{ fontSize: 10, color: C.mintMuted }}>평균</span>
-          </div>
-          <AreaChart data={sleepData} maxVal={9} color={C.mintMuted} h={90} />
+          {hasRows ? <DualLineChart a={screenPc} b={screenPhone} maxVal={10} colorA={C.mint} colorB="#4a4a4a" h={90} /> : <EmptyChart height={90} />}
         </ChartCard>
 
         {/* Focus */}
-        <ChartCard title="집중 시간" subtitle="시간 / 일">
+        <ChartCard title="공부 시간" subtitle="시간 / 일">
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12 }}>
-            <span style={{ fontSize: 26, fontWeight: 800, color: C.white }}>3.2시간</span>
+            <span style={{ fontSize: 26, fontWeight: 800, color: C.white }}>{avg(focusData).toFixed(1)}시간</span>
             <span style={{ fontSize: 10, color: C.mint }}>평균</span>
           </div>
-          <BarChartSVG data={focusData} maxVal={5} color={C.mint} h={90} />
+          {hasRows ? <BarChartSVG data={focusData} maxVal={5} color={C.mint} h={90} /> : <EmptyChart height={90} />}
         </ChartCard>
 
         {/* Steps */}
         <ChartCard title="걸음 수" subtitle="일일 걸음 수">
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12 }}>
-            <span style={{ fontSize: 26, fontWeight: 800, color: C.white }}>7.2천</span>
+            <span style={{ fontSize: 26, fontWeight: 800, color: C.white }}>{(avg(stepsData) / 1000).toFixed(1)}천</span>
             <span style={{ fontSize: 10, color: C.mint }}>평균</span>
           </div>
-          <BarChartSVG data={stepsData.map(v => v / 1000)} maxVal={10} color="#2a2a2a" accent={C.mint} h={90} />
+          {hasRows ? <BarChartSVG data={stepsData.map(v => v / 1000)} maxVal={10} color="#2a2a2a" accent={C.mint} h={90} /> : <EmptyChart height={90} />}
         </ChartCard>
       </div>
 
       {/* GitHub heatmap */}
       <div style={{ background: C.raised, borderRadius: 14, padding: '20px 24px', border: `1px solid ${C.border}`, marginBottom: 16 }}>
-        <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 14 }}>GITHUB 활동 · 37일</div>
-        <GithubHeatmap data={ghData} />
+        <div style={{ fontSize: 11, color: C.soft, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 14, fontWeight: 700 }}>GITHUB 활동 · {data.days}일</div>
+        {hasRows ? <GithubHeatmap data={ghData} /> : <EmptyChart height={54} />}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
         {/* App usage */}
         <ChartCard title="상위 앱" subtitle="누적 시간">
-          {apps.map(a => (
+          {apps.length ? apps.map(a => (
             <div key={a.name} style={{ marginBottom: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -512,18 +618,18 @@ function AnalyticsPage() {
                 <div style={{ width: `${a.pct}%`, height: '100%', background: a.color, borderRadius: 2 }} />
               </div>
             </div>
-          ))}
+          )) : <EmptyChart height={84} />}
         </ChartCard>
 
         {/* Insights */}
         <ChartCard title="인사이트" subtitle="감지된 패턴">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {insights.map((ins, i) => (
+            {insights.length ? insights.map((ins, i) => (
               <div key={i} style={{ display: 'flex', gap: 10, padding: '10px 12px', background: C.surface, borderRadius: 10, border: `1px solid ${C.border}` }}>
                 <span style={{ fontSize: 12, color: C.mint, fontWeight: 700, minWidth: 14 }}>{ins.icon}</span>
                 <p style={{ margin: 0, fontSize: 11, color: C.muted, lineHeight: 1.6 }}>{ins.text}</p>
               </div>
-            ))}
+            )) : <EmptyChart height={84} />}
           </div>
         </ChartCard>
       </div>
@@ -534,8 +640,8 @@ function AnalyticsPage() {
 function ChartCard({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
   return (
     <div style={{ background: C.raised, borderRadius: 14, padding: '20px', border: `1px solid ${C.border}` }}>
-      <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em' }}>{title}</div>
-      <div style={{ fontSize: 11, color: '#333', marginBottom: 14, marginTop: 1 }}>{subtitle}</div>
+      <div style={{ fontSize: 11, color: C.soft, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', fontWeight: 700 }}>{title}</div>
+      <div style={{ fontSize: 12, color: C.faint, marginBottom: 14, marginTop: 2 }}>{subtitle}</div>
       {children}
     </div>
   )
@@ -545,13 +651,35 @@ function Legend({ color, label }: { color: string; label: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
       <div style={{ width: 8, height: 2, borderRadius: 1, background: color }} />
-      <span style={{ fontSize: 10, color: C.alt }}>{label}</span>
+      <span style={{ fontSize: 12, color: C.muted, fontWeight: 600 }}>{label}</span>
     </div>
   )
 }
 
+function EmptyChart({ height }: { height: number; label?: string }) {
+  return (
+    <svg width="100%" viewBox={`0 0 300 ${height}`} preserveAspectRatio="none" style={{ display: 'block', height }}>
+      <line x1="0" y1={height / 2} x2="300" y2={height / 2} stroke={C.mint} strokeWidth="2" strokeLinecap="round" opacity="0.75" />
+    </svg>
+  )
+}
+
+function buildInsights(rows: TimelineEntry[]) {
+  if (rows.length < 2) return []
+  const first = rows[0]
+  const last = rows[rows.length - 1]
+  const insights: { icon: string; text: string }[] = []
+  const phoneDiff = last.phone_minutes - first.phone_minutes
+  const studyDiff = last.focus_minutes - first.focus_minutes
+  const commitTotal = rows.reduce((sum, row) => sum + row.github_commits, 0)
+  if (phoneDiff !== 0) insights.push({ icon: phoneDiff < 0 ? '↓' : '↑', text: `기간 첫 기록 대비 휴대폰 사용이 ${fmtMinutes(Math.abs(phoneDiff))} ${phoneDiff < 0 ? '줄었습니다.' : '늘었습니다.'}` })
+  if (studyDiff !== 0) insights.push({ icon: studyDiff > 0 ? '↑' : '↓', text: `기간 첫 기록 대비 공부 시간이 ${fmtMinutes(Math.abs(studyDiff))} ${studyDiff > 0 ? '늘었습니다.' : '줄었습니다.'}` })
+  if (commitTotal > 0) insights.push({ icon: '•', text: `선택 기간에 GitHub 커밋 ${commitTotal}개가 기록됐습니다.` })
+  return insights
+}
+
 function GithubHeatmap({ data }: { data: number[] }) {
-  const max = Math.max(...data)
+  const max = Math.max(1, ...data)
   const opacity = (v: number) => v === 0 ? 0.06 : 0.15 + (v / max) * 0.85
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
@@ -562,10 +690,6 @@ function GithubHeatmap({ data }: { data: number[] }) {
           cursor: 'default',
         }} />
       ))}
-      {/* future cells */}
-      {Array.from({ length: 63 }, (_, i) => (
-        <div key={`f${i}`} style={{ width: 14, height: 14, borderRadius: 3, background: C.border, opacity: 0.5 }} />
-      ))}
     </div>
   )
 }
@@ -573,19 +697,30 @@ function GithubHeatmap({ data }: { data: number[] }) {
 /* ═══════════════════════════════════════════════
    FOCUS
 ═══════════════════════════════════════════════ */
-function FocusPage() {
+function FocusPage({ currentDay }: { currentDay: number }) {
   const [running, setRunning] = useState(false)
   const [secs, setSecs] = useState(0)
   const [cat, setCat] = useState('개발')
+  const [newCat, setNewCat] = useState('')
+  const [note, setNote] = useState('')
+  const [startedAt, setStartedAt] = useState<string | null>(null)
+  const [sessions, setSessions] = useState<FocusSession[]>([])
+  const [categories, setCategories] = useState<StudyCategory[]>([])
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
   const ref = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const cats = ['개발', '코딩 테스트', '학교 공부', '자격증', '독서', '기타']
-  const sessions = [
-    { start: '09:21', end: '10:13', cat: '개발', dur: '52분', mins: 52 },
-    { start: '16:10', end: '17:42', cat: '개발', dur: '1시간 32분', mins: 92 },
-    { start: '22:03', end: '22:41', cat: '코딩 테스트', dur: '38분', mins: 38 },
-  ]
-  const totalMins = sessions.reduce((a, s) => a + s.mins, 0) + Math.floor(secs / 60)
+  const totalMins = sessions.reduce((a, s) => a + s.duration_minutes, 0) + Math.floor(secs / 60)
+
+  useEffect(() => {
+    api.focusSessions(currentDay).then(setSessions).catch((err) => setError(err.message))
+    api.studyCategories()
+      .then((items) => {
+        setCategories(items)
+        if (items[0]) setCat(items[0].name)
+      })
+      .catch((err) => setError(err.message))
+  }, [currentDay])
 
   useEffect(() => {
     if (running) ref.current = setInterval(() => setSecs(s => s + 1), 1000)
@@ -594,13 +729,61 @@ function FocusPage() {
   }, [running])
 
   const fmt = (s: number) => [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60].map(n => n.toString().padStart(2, '0')).join(':')
+  const toClock = (iso: string | null) => iso ? new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }) : '--:--'
+  const toggleTimer = async () => {
+    if (!running) {
+      setStartedAt(new Date().toISOString())
+      setSecs(0)
+      setRunning(true)
+      return
+    }
+
+    setRunning(false)
+    if (!startedAt || secs < 60) {
+      setSecs(0)
+      return
+    }
+
+    setSaving(true)
+    try {
+      const saved = await api.addFocusSession({
+        day_number: currentDay,
+        category: cat,
+        note,
+        started_at: startedAt,
+        ended_at: new Date().toISOString(),
+        duration_minutes: Math.max(1, Math.round(secs / 60)),
+      })
+      setSessions((items) => [...items, saved])
+      setStartedAt(null)
+      setNote('')
+      setSecs(0)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '집중 세션 저장 실패')
+    } finally {
+      setSaving(false)
+    }
+  }
+  const addCategory = async () => {
+    const name = newCat.trim()
+    if (!name) return
+    try {
+      const saved = await api.addStudyCategory({ name })
+      setCategories((items) => items.some((item) => item.name === saved.name) ? items : [...items, saved])
+      setCat(saved.name)
+      setNewCat('')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '카테고리 추가 실패')
+    }
+  }
   const goalMins = 240
 
   return (
     <div style={{ padding: '40px 36px', maxWidth: 600, margin: '0 auto' }}>
+      {error && <div style={{ color: C.mintMuted, fontSize: 12, marginBottom: 16 }}>{error}</div>}
       {/* Big timer */}
       <div style={{ textAlign: 'center', marginBottom: 40 }}>
-        <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.2em', marginBottom: 28 }}>집중 세션</div>
+        <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.2em', marginBottom: 28 }}>공부 기록</div>
 
         {/* ring around timer */}
         <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 24 }}>
@@ -614,30 +797,41 @@ function FocusPage() {
             }}>
               {fmt(secs)}
             </div>
-            {running && <div style={{ fontSize: 11, color: C.alt, marginTop: 6 }}>{cat}</div>}
+            {running && <div style={{ fontSize: 11, color: C.alt, marginTop: 6 }}>{cat}{note ? ` · ${note}` : ''}</div>}
           </div>
         </div>
 
         {!running && (
           <div style={{ marginBottom: 28 }}>
-            <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.1em', marginBottom: 12 }}>카테고리</div>
+            <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.1em', marginBottom: 12 }}>지금 하는 일</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
-              {cats.map(c => (
-                <button key={c} onClick={() => setCat(c)} style={{
+              {categories.map(c => (
+                <button key={c.id} onClick={() => setCat(c.name)} style={{
                   padding: '7px 14px', borderRadius: 30, cursor: 'pointer', transition: 'all 120ms',
-                  border: `1px solid ${cat === c ? C.mint : C.border2}`,
-                  background: cat === c ? 'rgba(0,232,197,0.08)' : 'transparent',
-                  color: cat === c ? C.mint : C.alt,
+                  border: `1px solid ${cat === c.name ? C.mint : C.border2}`,
+                  background: cat === c.name ? 'rgba(0,232,197,0.08)' : 'transparent',
+                  color: cat === c.name ? C.mint : C.alt,
                   fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12,
                 }}>
-                  {c}
+                  {c.name}
                 </button>
               ))}
             </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+              <input value={newCat} onChange={e => setNewCat(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addCategory() }}
+                placeholder="새 활동 추가: 예) 수학 문제풀이"
+                style={{ flex: 1, padding: '10px 12px', background: C.raised, border: `1px solid ${C.border2}`, borderRadius: 8, color: C.white, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, outline: 'none' }}
+              />
+              <button onClick={addCategory} style={{ padding: '0 14px', borderRadius: 8, border: 'none', background: C.chip, color: C.mint, cursor: 'pointer', fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12 }}>추가</button>
+            </div>
+            <input value={note} onChange={e => setNote(e.target.value)}
+              placeholder="노트북/휴대폰 없이 하는 일을 적어두기"
+              style={{ width: '100%', marginTop: 10, padding: '10px 12px', background: C.raised, border: `1px solid ${C.border2}`, borderRadius: 8, color: C.white, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, outline: 'none' }}
+            />
           </div>
         )}
 
-        <button onClick={() => { setRunning(r => !r); if (running) setSecs(0) }} style={{
+        <button onClick={toggleTimer} disabled={saving} style={{
           padding: '13px 48px', borderRadius: 50, border: 'none', cursor: 'pointer',
           background: running ? 'transparent' : C.mint,
           color: running ? C.white : C.ink,
@@ -646,7 +840,7 @@ function FocusPage() {
           fontSize: 13, fontWeight: 700, letterSpacing: '0.06em',
           transition: 'all 120ms',
         }}>
-          {running ? '중지' : '집중 시작'}
+          {saving ? '저장 중...' : running ? '중지하고 저장' : '공부 시작'}
         </button>
       </div>
 
@@ -664,7 +858,7 @@ function FocusPage() {
       </div>
 
       {/* Sessions */}
-      <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 12 }}>오늘 세션</div>
+      <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 12 }}>오늘 공부 기록</div>
       {sessions.map((s, i) => (
         <div key={i} style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -672,13 +866,14 @@ function FocusPage() {
           border: `1px solid ${C.border}`, marginBottom: 8,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ width: 3, height: 40, borderRadius: 2, background: s.cat === '개발' ? C.mint : C.mintMuted, marginRight: 10, alignSelf: 'center' }} />
+            <div style={{ width: 3, height: 40, borderRadius: 2, background: s.category === '개발' || s.category === 'Development' ? C.mint : C.mintMuted, marginRight: 10, alignSelf: 'center' }} />
             <div>
-              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.alt, marginBottom: 3 }}>{s.start} – {s.end}</div>
-              <div style={{ fontSize: 13, color: C.muted }}>{s.cat}</div>
+              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.alt, marginBottom: 3 }}>{toClock(s.started_at)} - {toClock(s.ended_at)}</div>
+              <div style={{ fontSize: 13, color: C.muted }}>{s.category.replace('Development', '개발').replace('Coding Test', '코딩 테스트')}</div>
+              {s.note && <div style={{ fontSize: 11, color: C.alt, marginTop: 3 }}>{s.note}</div>}
             </div>
           </div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, color: C.mint, fontWeight: 600 }}>{s.dur}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, color: C.mint, fontWeight: 600 }}>{fmtMinutes(s.duration_minutes)}</div>
         </div>
       ))}
     </div>
@@ -690,17 +885,69 @@ function FocusPage() {
 ═══════════════════════════════════════════════ */
 function DevicesPage() {
   const [qr, setQr] = useState(false)
+  const [devices, setDevices] = useState<DeviceData[]>([])
+  const [pairing, setPairing] = useState<DevicePairingData | null>(null)
+  const [pendingDevice, setPendingDevice] = useState<{ kind: string; name: string; platform: string } | null>(null)
+  const [error, setError] = useState('')
 
-  const connected = [
-    { name: '선우 노트북', sub: 'Windows 11', sync: '2분 전',  Illu: () => <IlluLaptop /> },
-    { name: 'Galaxy S25',    sub: 'Android 15', sync: '5분 전',  Illu: () => <IlluPhone  /> },
-    { name: 'Galaxy Watch 7',sub: 'Health Connect', sync: '12분 전', Illu: () => <IlluWatch /> },
-    { name: '@sunwoo_dev',   sub: '382 commits', sync: '1시간 전',    Illu: () => <IlluGit   /> },
-  ]
+  const refresh = () => api.devices().then(setDevices).catch((err) => setError(err.message))
+
+  useEffect(() => { refresh() }, [])
+
+  const startPairing = async (device: { kind: string; name: string; platform: string }) => {
+    setError('')
+    setPendingDevice(device)
+    try {
+      const created = await api.createDevicePairing(device)
+      setPairing(created)
+      setQr(true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '기기 연결 코드 생성 실패')
+    }
+  }
+
+  const completePairing = async () => {
+    if (!pairing) return
+    setError('')
+    try {
+      await api.connectDevice({ token: pairing.token })
+      setQr(false)
+      setPairing(null)
+      setPendingDevice(null)
+      await refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '기기 연결 실패')
+    }
+  }
+
+  const disconnect = async (id: number) => {
+    setError('')
+    try {
+      await api.disconnectDevice(id)
+      await refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '기기 연결 해제 실패')
+    }
+  }
+
+  const illustration = (kind: string) => {
+    if (kind === 'phone') return () => <IlluPhone />
+    if (kind === 'watch') return () => <IlluWatch />
+    if (kind === 'github') return () => <IlluGit />
+    return () => <IlluLaptop />
+  }
+  const connected = devices.map((device) => ({
+    id: device.id,
+    name: device.name,
+    sub: device.platform,
+    sync: shortTime(device.last_sync),
+    Illu: illustration(device.kind),
+  }))
 
   return (
     <div style={{ padding: '32px 36px' }}>
       <div style={{ fontSize: 32, fontWeight: 900, color: C.white, letterSpacing: '-0.02em', marginBottom: 28 }}>연결된 기기</div>
+      {error && <div style={{ color: C.mintMuted, fontSize: 12, marginBottom: 16 }}>{error}</div>}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14, marginBottom: 32 }}>
         {connected.map((d) => (
@@ -717,7 +964,7 @@ function DevicesPage() {
             <div style={{ fontSize: 10, color: '#333', fontFamily: "'JetBrains Mono', monospace", marginBottom: 16 }}>동기화 {d.sync}</div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button style={{ flex: 1, padding: '7px', borderRadius: 7, border: `1px solid ${C.border2}`, background: 'transparent', color: C.alt, fontSize: 11, cursor: 'pointer', fontFamily: "'Pretendard', system-ui, sans-serif" }}>설정</button>
-              <button style={{ flex: 1, padding: '7px', borderRadius: 7, border: `1px solid ${C.border2}`, background: 'transparent', color: '#3a3a3a', fontSize: 11, cursor: 'pointer', fontFamily: "'Pretendard', system-ui, sans-serif" }}>연결 해제</button>
+              <button onClick={() => disconnect(d.id)} style={{ flex: 1, padding: '7px', borderRadius: 7, border: `1px solid ${C.border2}`, background: 'transparent', color: C.faint, fontSize: 11, cursor: 'pointer', fontFamily: "'Pretendard', system-ui, sans-serif" }}>연결 해제</button>
             </div>
           </div>
         ))}
@@ -727,12 +974,12 @@ function DevicesPage() {
         <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 18 }}>추가 연결</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
           {[
-            { label: '트래커 설치', sub: 'macOS / Windows', Illu: () => <IlluLaptop dim /> },
-            { label: 'Android 앱',     sub: '연동 앱',   Illu: () => <IlluPhone  dim />, action: () => setQr(true) },
-            { label: 'Health Connect',  sub: 'Wear OS',         Illu: () => <IlluWatch  dim /> },
-            { label: 'GitHub',          sub: 'OAuth 연결',   Illu: () => <IlluGit    dim /> },
+            { label: '트래커 설치', sub: 'macOS / Windows', kind: 'computer', name: '데스크톱 트래커', platform: 'macOS / Windows', Illu: () => <IlluLaptop dim /> },
+            { label: 'Android 앱', sub: '연동 앱', kind: 'phone', name: 'Android 앱', platform: 'Android', Illu: () => <IlluPhone  dim /> },
+            { label: 'Health Connect', sub: 'Wear OS', kind: 'watch', name: 'Health Connect', platform: 'Wear OS', Illu: () => <IlluWatch  dim /> },
+            { label: 'GitHub', sub: 'OAuth 연결', kind: 'github', name: 'GitHub', platform: 'GitHub OAuth', Illu: () => <IlluGit dim /> },
           ].map((item) => (
-            <button key={item.label} onClick={item.action} style={{
+            <button key={item.label} onClick={() => startPairing(item)} style={{
               padding: '16px', background: C.surface, borderRadius: 12,
               border: `1px dashed ${C.border2}`, cursor: 'pointer', textAlign: 'left',
               transition: 'border-color 120ms',
@@ -748,19 +995,22 @@ function DevicesPage() {
       {qr && (
         <div onClick={() => setQr(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: C.raised, borderRadius: 20, padding: '36px', border: `1px solid ${C.border2}`, textAlign: 'center', maxWidth: 320 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: C.white, marginBottom: 6 }}>휴대폰 연결</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: C.white, marginBottom: 6 }}>{pendingDevice?.name || '기기'} 연결</div>
             <div style={{ fontSize: 11, color: C.alt, marginBottom: 24, lineHeight: 1.9 }}>
-              1. 100 DAYS 모바일 앱을 여세요<br />
-              2. 이 QR 코드를 스캔하세요<br />
-              3. 필요한 권한을 허용하세요
+              연결 코드가 10분 동안 유효합니다.<br />
+              외부 트래커 앱은 이 코드를 `/api/devices/connect`로 전송하면 됩니다.
             </div>
-            <div style={{ background: C.white, borderRadius: 12, padding: 16, display: 'inline-block', marginBottom: 20 }}>
-              <QRCode />
+            <div style={{ background: C.surface, borderRadius: 12, padding: '14px 16px', marginBottom: 20, border: `1px solid ${C.border2}` }}>
+              <div style={{ fontFamily: "'JetBrains Mono', monospace", color: C.mint, fontSize: 18, fontWeight: 800, wordBreak: 'break-all' }}>{pairing?.token || '생성 중'}</div>
+              <div style={{ fontSize: 10, color: C.alt, marginTop: 8 }}>{pairing ? new Date(pairing.expires_at).toLocaleTimeString('ko-KR') : ''} 만료</div>
             </div>
             <div style={{ fontSize: 10, color: C.alt, fontFamily: "'JetBrains Mono', monospace", marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
               <PulsingDot />&nbsp;기기 연결 대기 중...
             </div>
-            <button onClick={() => setQr(false)} style={{ padding: '9px 24px', borderRadius: 8, border: `1px solid ${C.border2}`, background: 'transparent', color: C.alt, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, cursor: 'pointer' }}>취소</button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setQr(false)} style={{ flex: 1, padding: '9px 14px', borderRadius: 8, border: `1px solid ${C.border2}`, background: 'transparent', color: C.alt, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, cursor: 'pointer' }}>취소</button>
+              <button onClick={completePairing} style={{ flex: 1, padding: '9px 14px', borderRadius: 8, border: 'none', background: C.mint, color: C.ink, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>이 기기로 연결</button>
+            </div>
           </div>
         </div>
       )}
@@ -769,135 +1019,86 @@ function DevicesPage() {
 }
 
 /* ═══════════════════════════════════════════════
-   DAILY CHECK-IN
-═══════════════════════════════════════════════ */
-function CheckinPage({ setPage }: { setPage: (p: Page) => void }) {
-  const [focus, setFocus] = useState(0)
-  const [sat, setSat] = useState(0)
-  const [note, setNote] = useState('')
-  const [done, setDone] = useState(false)
-
-  const save = () => { setDone(true); setTimeout(() => setPage('dashboard'), 1400) }
-
-  return (
-    <div style={{ padding: '40px 36px', maxWidth: 500 }}>
-      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.alt, letterSpacing: '0.15em', marginBottom: 6 }}>오늘 체크인</div>
-      <div style={{ fontSize: 28, fontWeight: 900, color: C.white, marginBottom: 4, letterSpacing: '-0.02em' }}>37일차</div>
-      <div style={{ fontSize: 11, color: C.alt, marginBottom: 40 }}>30초 안에 끝납니다.</div>
-
-      <ScoreInput label="오늘 얼마나 집중했나요?" value={focus} set={setFocus} color={C.mint} />
-      <ScoreInput label="오늘 만족도는 어떤가요?" value={sat} set={setSat} color={C.mintMuted} />
-
-      <div style={{ marginBottom: 36 }}>
-        <div style={{ fontSize: 13, color: C.muted, marginBottom: 10 }}>오늘을 한 줄로 남기기</div>
-        <input value={note} onChange={e => setNote(e.target.value)}
-          placeholder="오늘 하루를 한 문장으로..."
-          style={{
-            width: '100%', padding: '13px 15px', background: C.raised,
-            border: `1px solid ${C.border2}`, borderRadius: 10, color: C.white,
-            fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 14,
-            outline: 'none', transition: 'border-color 120ms',
-          }}
-        />
-      </div>
-
-      <button onClick={save} disabled={focus === 0 || sat === 0} style={{
-        width: '100%', padding: '15px', borderRadius: 50, border: 'none', cursor: focus && sat ? 'pointer' : 'not-allowed',
-        background: done ? C.mintMuted : focus && sat ? C.mint : '#1e1e1e',
-        color: done || (focus && sat) ? C.ink : C.alt,
-        fontFamily: "'Pretendard', system-ui, sans-serif",
-        fontSize: 13, fontWeight: 700, letterSpacing: '0.05em',
-        transition: 'all 200ms',
-      }}>
-        {done ? '✓  저장됨' : '오늘 저장'}
-      </button>
-    </div>
-  )
-}
-
-function ScoreInput({ label, value, set, color }: { label: string; value: number; set: (n: number) => void; color: string }) {
-  return (
-    <div style={{ marginBottom: 30 }}>
-      <div style={{ fontSize: 13, color: C.muted, marginBottom: 14 }}>{label}</div>
-      <div style={{ display: 'flex', gap: 6 }}>
-        {Array.from({ length: 10 }, (_, i) => i + 1).map(n => (
-          <button key={n} onClick={() => set(n)} style={{
-            flex: 1, padding: '10px 0', borderRadius: 7, border: 'none', cursor: 'pointer',
-            background: n <= value ? color : C.raised,
-            color: n <= value ? C.ink : '#3a3a3a',
-            fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: n <= value ? 700 : 400,
-            transition: 'all 100ms',
-          }}>
-            {n}
-          </button>
-        ))}
-      </div>
-      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: value ? color : '#2a2a2a', marginTop: 7 }}>
-        {value ? `${value} / 10` : '선택하세요'}
-      </div>
-    </div>
-  )
-}
-
-/* ═══════════════════════════════════════════════
    RESULT PAGE
 ═══════════════════════════════════════════════ */
 function ResultPage() {
-  const bigStats = [
-    { label: '수면',      val: '642시간', color: C.mintMuted },
-    { label: 'PC',         val: '481시간', color: C.mint },
-    { label: '휴대폰',      val: '392시간', color: C.faint },
-    { label: '집중',      val: '247시간', color: C.mintBright },
-    { label: '개발',        val: '181시간', color: C.mint },
-    { label: '운동',   val: '41시간',  color: C.mintMuted },
-  ]
+  const [data, setData] = useState<ResultData | null>(null)
+  const [error, setError] = useState('')
 
+  useEffect(() => {
+    api.result().then(setData).catch((err) => setError(err.message))
+  }, [])
+
+  if (error) return <ErrorBlock message={error} />
+  if (!data) return <LoadingBlock />
+
+  const summaryData = data.rows.map((row) => row.focus_minutes / 60)
+  const hasRows = data.rows.length > 0
+  const trackedMinutes = data.totals.pc_minutes + data.totals.phone_minutes + data.totals.focus_minutes + data.totals.development_minutes + data.totals.exercise_minutes
+  const totalHours = Math.round(trackedMinutes / 60)
+  const activityTotals = [
+    { label: 'PC 사용', minutes: data.totals.pc_minutes, color: C.mint },
+    { label: '휴대폰 사용', minutes: data.totals.phone_minutes, color: C.faint },
+    { label: '공부', minutes: data.totals.focus_minutes, color: C.mintBright },
+    { label: '개발', minutes: data.totals.development_minutes, color: C.mint },
+    { label: '운동', minutes: data.totals.exercise_minutes, color: C.mintMuted },
+  ]
+  const maxActivityMinutes = Math.max(1, ...activityTotals.map((item) => item.minutes))
+  const activityStats = [
+    ...activityTotals.map((item) => ({ label: item.label, val: fmtMinutes(item.minutes), pct: Math.round((item.minutes / maxActivityMinutes) * 100), color: item.color })),
+    { label: '걸음', val: `${data.totals.steps.toLocaleString()}보`, pct: 0, color: C.white },
+    { label: 'GitHub', val: `${data.totals.github_commits.toLocaleString()}커밋`, pct: 0, color: C.mint },
+  ]
+  const pct = (first: number, last: number, invert = false) => {
+    const delta = first ? Math.round(((last - first) / first) * 100) : 0
+    const good = invert ? delta <= 0 : delta >= 0
+    return { delta: `${delta >= 0 ? '↑' : '↓'} ${Math.abs(delta)}%`, good }
+  }
+  const phone = pct(data.first.phone_minutes, data.last.phone_minutes, true)
+  const focus = pct(data.first.focus_minutes, data.last.focus_minutes)
+  const dev = pct(data.first.development_minutes, data.last.development_minutes)
   const compare = [
-    { label: '휴대폰 사용량', d1: '6시간 21분', d100: '3시간 52분', delta: '↓ 39%', good: true },
-    { label: '집중 시간',  d1: '42분',    d100: '3시간 21분', delta: '↑ 379%', good: true },
-    { label: '개발 시간',    d1: '1시간 10분', d100: '4시간 31분', delta: '↑ 288%', good: true },
-    { label: '수면',       d1: '5시간 48분', d100: '7시간 12분', delta: '↑ 24%',  good: true },
+    { label: '휴대폰 사용량', d1: fmtMinutes(data.first.phone_minutes), d100: fmtMinutes(data.last.phone_minutes), ...phone },
+    { label: '공부 시간', d1: fmtMinutes(data.first.focus_minutes), d100: fmtMinutes(data.last.focus_minutes), ...focus },
+    { label: '개발 시간', d1: fmtMinutes(data.first.development_minutes), d100: fmtMinutes(data.last.development_minutes), ...dev },
   ]
-
-  /* spark summary bars for result */
-  const summaryData = [3,4,4,5,5,4,6,5,6,7,6,7,8,7,8,8,9,8,9,9,9,10,9,10,10,10,9,10,10,10,10,10,9,10,10,10,10]
 
   return (
     <div style={{ padding: '48px 40px' }}>
       {/* Hero */}
       <div style={{ textAlign: 'center', marginBottom: 64 }}>
-        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.alt, letterSpacing: '0.3em', marginBottom: 16 }}>100 DAYS</div>
+        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.alt, letterSpacing: '0.3em', marginBottom: 16 }}>하루핏</div>
         <div style={{ fontSize: 88, fontWeight: 900, color: C.white, letterSpacing: '-0.04em', lineHeight: 0.9, marginBottom: 16 }}>완료</div>
         <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, color: C.mint, marginBottom: 48 }}>100 / 100</div>
 
-        <div style={{ fontSize: 60, fontWeight: 900, color: C.white, letterSpacing: '-0.03em', lineHeight: 1 }}>2,400</div>
+        <div style={{ fontSize: 60, fontWeight: 900, color: C.white, letterSpacing: '-0.03em', lineHeight: 1 }}>{totalHours.toLocaleString()}</div>
         <div style={{ fontSize: 14, fontWeight: 900, color: C.white, letterSpacing: '0.1em', marginBottom: 4 }}>시간</div>
-        <div style={{ fontSize: 11, color: C.alt }}>삶의 100일을 기록했습니다</div>
+        <div style={{ fontSize: 11, color: C.alt }}>1~100일 동안 기록된 활동 총합입니다</div>
 
         {/* mini trend */}
         <div style={{ maxWidth: 500, margin: '28px auto 0', opacity: 0.6 }}>
-          <AreaChart data={summaryData} maxVal={10} color={C.mint} h={40} />
+          {hasRows ? <AreaChart data={summaryData} maxVal={10} color={C.mint} h={40} /> : <EmptyChart height={40} />}
         </div>
-        <div style={{ fontSize: 10, color: '#333', fontFamily: "'JetBrains Mono', monospace", marginTop: 4 }}>집중 점수 — 1일차 → 100일차</div>
+        <div style={{ fontSize: 10, color: '#333', fontFamily: "'JetBrains Mono', monospace", marginTop: 4 }}>공부 시간 — 실제 기록 기반</div>
       </div>
 
-      {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 12 }}>
-        {bigStats.map(s => (
-          <div key={s.label} style={{ background: C.raised, borderRadius: 14, padding: '22px', border: `1px solid ${C.border}`, textAlign: 'center' }}>
-            <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 6 }}>{s.label.toUpperCase()}</div>
-            <div style={{ fontSize: 36, fontWeight: 900, color: s.color, letterSpacing: '-0.03em' }}>{s.val}</div>
-          </div>
-        ))}
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 40 }}>
-        <div style={{ background: C.raised, borderRadius: 14, padding: '20px 24px', border: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: 11, color: C.alt }}>총 걸음 수</span>
-          <span style={{ fontSize: 28, fontWeight: 900, color: C.white, letterSpacing: '-0.02em' }}>1,043,291</span>
-        </div>
-        <div style={{ background: C.raised, borderRadius: 14, padding: '20px 24px', border: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: 11, color: C.alt }}>GitHub 커밋</span>
-          <span style={{ fontSize: 28, fontWeight: 900, color: C.mint, letterSpacing: '-0.02em' }}>382</span>
+      {/* Totals */}
+      <div style={{ background: C.raised, borderRadius: 14, padding: '28px', border: `1px solid ${C.border}`, marginBottom: 40 }}>
+        <div style={{ fontSize: 11, color: C.soft, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 20, fontWeight: 700 }}>1~100일 활동 총합</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 14 }}>
+          {activityStats.map((s) => (
+            <div key={s.label} style={{ background: C.surface, borderRadius: 12, padding: '18px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, marginBottom: s.pct ? 12 : 0 }}>
+                <span style={{ fontSize: 12, color: C.muted, fontWeight: 700 }}>{s.label}</span>
+                <span style={{ fontSize: 22, fontWeight: 900, color: s.color, letterSpacing: '-0.02em' }}>{s.val}</span>
+              </div>
+              {s.pct > 0 && (
+                <div style={{ height: 4, background: C.border, borderRadius: 4 }}>
+                  <div style={{ width: `${s.pct}%`, height: '100%', background: s.color, borderRadius: 4 }} />
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       </div>
 
@@ -931,8 +1132,10 @@ function ResultPage() {
    SVG CHARTS
 ═══════════════════════════════════════════════ */
 function Sparkline({ data, color, max }: { data: number[]; color: string; max: number }) {
+  if (!data.length) return <EmptyChart height={28} />
   const W = 120, H = 28
-  const pts = data.map((v, i) => `${(i / (data.length - 1)) * W},${H - (v / max) * H}`).join(' ')
+  const denom = Math.max(1, data.length - 1)
+  const pts = data.map((v, i) => `${(i / denom) * W},${H - (v / max) * H}`).join(' ')
   return (
     <svg width="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display: 'block', height: 28 }}>
       <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
@@ -946,8 +1149,10 @@ function Sparkline({ data, color, max }: { data: number[]; color: string; max: n
 }
 
 function AreaChart({ data, maxVal, color, h }: { data: number[]; maxVal: number; color: string; h: number }) {
+  if (!data.length) return <EmptyChart height={h} />
   const W = 300
-  const pts = data.map((v, i) => `${(i / (data.length - 1)) * W},${h - (v / maxVal) * h}`)
+  const denom = Math.max(1, data.length - 1)
+  const pts = data.map((v, i) => `${(i / denom) * W},${h - (v / maxVal) * h}`)
   const line = pts.join(' ')
   const area = `0,${h} ${line} ${W},${h}`
   const id = `ag${color.replace('#', '')}`
@@ -966,8 +1171,12 @@ function AreaChart({ data, maxVal, color, h }: { data: number[]; maxVal: number;
 }
 
 function DualLineChart({ a, b, maxVal, colorA, colorB, h }: { a: number[]; b: number[]; maxVal: number; colorA: string; colorB: string; h: number }) {
+  if (!a.length && !b.length) return <EmptyChart height={h} />
   const W = 300
-  const pts = (arr: number[]) => arr.map((v, i) => `${(i / (arr.length - 1)) * W},${h - (v / maxVal) * h}`).join(' ')
+  const pts = (arr: number[]) => {
+    const denom = Math.max(1, arr.length - 1)
+    return arr.map((v, i) => `${(i / denom) * W},${h - (v / maxVal) * h}`).join(' ')
+  }
   return (
     <svg width="100%" viewBox={`0 0 ${W} ${h}`} preserveAspectRatio="none" style={{ display: 'block', height: h }}>
       <polyline points={pts(a)} fill="none" stroke={colorA} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -977,6 +1186,7 @@ function DualLineChart({ a, b, maxVal, colorA, colorB, h }: { a: number[]; b: nu
 }
 
 function BarChartSVG({ data, maxVal, color, accent, h }: { data: number[]; maxVal: number; color: string; accent?: string; h: number }) {
+  if (!data.length) return <EmptyChart height={h} />
   const W = 300
   const gap = 3
   const bw = (W - gap * (data.length - 1)) / data.length
@@ -1146,6 +1356,25 @@ function LogoMark() {
   )
 }
 
+function IcoGitHubBrand() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 .5A11.5 11.5 0 0 0 8.36 22.9c.58.11.79-.25.79-.56v-2.18c-3.22.7-3.9-1.38-3.9-1.38-.53-1.35-1.29-1.71-1.29-1.71-1.06-.72.08-.71.08-.71 1.17.08 1.78 1.2 1.78 1.2 1.04 1.78 2.73 1.27 3.4.97.1-.75.41-1.27.74-1.56-2.57-.29-5.27-1.28-5.27-5.72 0-1.26.45-2.3 1.19-3.11-.12-.29-.52-1.47.11-3.06 0 0 .97-.31 3.17 1.19A10.9 10.9 0 0 1 12 5.88c.98 0 1.96.13 2.88.39 2.2-1.5 3.17-1.19 3.17-1.19.63 1.59.23 2.77.11 3.06.74.81 1.19 1.85 1.19 3.11 0 4.45-2.7 5.42-5.28 5.71.42.36.79 1.07.79 2.16v3.22c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z" />
+    </svg>
+  )
+}
+
+function IcoGoogleBrand() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+      <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.91c1.7-1.57 2.69-3.88 2.69-6.62Z" />
+      <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.91-2.26c-.8.54-1.83.86-3.05.86-2.35 0-4.34-1.58-5.05-3.71H.94v2.33A9 9 0 0 0 9 18Z" />
+      <path fill="#FBBC05" d="M3.95 10.71A5.41 5.41 0 0 1 3.67 9c0-.59.1-1.16.28-1.71V4.96H.94A9 9 0 0 0 0 9c0 1.45.35 2.82.94 4.04l3.01-2.33Z" />
+      <path fill="#EA4335" d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .94 4.96l3.01 2.33C4.66 5.16 6.65 3.58 9 3.58Z" />
+    </svg>
+  )
+}
+
 function QRCode() {
   return (
     <svg width="120" height="120" viewBox="0 0 120 120" fill="#171b21">
@@ -1224,9 +1453,6 @@ function IcoTimer({ c }: { c: string }) {
 }
 function IcoDevice({ c }: { c: string }) {
   return <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="1.5" y="2.5" width="8" height="10" rx="1.5" stroke={c} strokeWidth="1.1"/><path d="M11 4.5h1a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-1" stroke={c} strokeWidth="1.1"/></svg>
-}
-function IcoCheck({ c }: { c: string }) {
-  return <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M2.5 7.5L6 11l6.5-7" stroke={c} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
 }
 function IcoTrophy({ c }: { c: string }) {
   return <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M4.5 1.5h6v6a3 3 0 0 1-6 0V1.5z" stroke={c} strokeWidth="1.1"/><path d="M4.5 4.5H3a1.5 1.5 0 1 0 0 3h1.5M10.5 4.5H12a1.5 1.5 0 1 1 0 3h-1.5" stroke={c} strokeWidth="1.1"/><path d="M7.5 10.5v2M5 12.5h5" stroke={c} strokeWidth="1.1" strokeLinecap="round"/></svg>

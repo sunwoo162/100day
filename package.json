@@ -1,5 +1,5 @@
 {
-  "name": "100-days-dashboard",
+  "name": "nayibaegil",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -10,7 +10,6 @@
     "format": "oxfmt",
     "dev:web": "vite --host 0.0.0.0",
     "dev:api": "node server/index.mjs",
-    "seed": "node server/seed.mjs",
     "db:reset": "node server/reset-db.mjs"
   },
   "dependencies": {

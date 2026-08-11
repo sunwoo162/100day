@@ -10,6 +10,5 @@ if (fs.existsSync(dbPath)) {
   console.log(`Deleted: ${dbPath}`)
 }
 
-const { seed } = await import('./seed.mjs')
-seed()
-console.log('Database reset and mock data seeded.')
+await import('./db.mjs')
+console.log('Database reset. Empty tables and default study categories are ready.')

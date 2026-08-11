@@ -1,0 +1,95 @@
+name: Deploy Harufit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [develop]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build check
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm ci --no-audit --fund=false
+
+      - name: Build
+        run: npm run build
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          HARUFIT_HOST_PORT: ${{ vars.HARUFIT_HOST_PORT || '4010' }}
+          HARUFIT_WEB_ORIGIN: ${{ vars.HARUFIT_WEB_ORIGIN || 'https://harufit.https.gsmsv.site' }}
+          HARUFIT_API_ORIGIN: ${{ vars.HARUFIT_API_ORIGIN || 'https://harufit.https.gsmsv.site' }}
+          HARUFIT_GOOGLE_CLIENT_ID: ${{ secrets.HARUFIT_GOOGLE_CLIENT_ID }}
+          HARUFIT_GOOGLE_CLIENT_SECRET: ${{ secrets.HARUFIT_GOOGLE_CLIENT_SECRET }}
+          HARUFIT_GITHUB_CLIENT_ID: ${{ secrets.HARUFIT_GITHUB_CLIENT_ID }}
+          HARUFIT_GITHUB_CLIENT_SECRET: ${{ secrets.HARUFIT_GITHUB_CLIENT_SECRET }}
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          envs: HARUFIT_HOST_PORT,HARUFIT_WEB_ORIGIN,HARUFIT_API_ORIGIN,HARUFIT_GOOGLE_CLIENT_ID,HARUFIT_GOOGLE_CLIENT_SECRET,HARUFIT_GITHUB_CLIENT_ID,HARUFIT_GITHUB_CLIENT_SECRET
+          script: |
+            set -e
+
+            APP_DIR=/home/ubuntu/harufit
+            REPO_URL=https://github.com/sunwoo162/100day.git
+            BRANCH=develop
+
+            if [ ! -d "$APP_DIR/.git" ]; then
+              rm -rf "$APP_DIR"
+              git clone --branch "$BRANCH" "$REPO_URL" "$APP_DIR"
+            fi
+
+            cd "$APP_DIR"
+            git fetch origin "$BRANCH"
+            git reset --hard "origin/$BRANCH"
+
+            test -n "$HARUFIT_GOOGLE_CLIENT_ID" || { echo "HARUFIT_GOOGLE_CLIENT_ID secret is missing"; exit 1; }
+            test -n "$HARUFIT_GOOGLE_CLIENT_SECRET" || { echo "HARUFIT_GOOGLE_CLIENT_SECRET secret is missing"; exit 1; }
+            test -n "$HARUFIT_GITHUB_CLIENT_ID" || { echo "HARUFIT_GITHUB_CLIENT_ID secret is missing"; exit 1; }
+            test -n "$HARUFIT_GITHUB_CLIENT_SECRET" || { echo "HARUFIT_GITHUB_CLIENT_SECRET secret is missing"; exit 1; }
+
+            cat > .env <<EOF
+            API_PORT=4000
+            HOST_PORT=$HARUFIT_HOST_PORT
+            WEB_ORIGIN=$HARUFIT_WEB_ORIGIN
+            API_ORIGIN=$HARUFIT_API_ORIGIN
+            GOOGLE_CLIENT_ID=$HARUFIT_GOOGLE_CLIENT_ID
+            GOOGLE_CLIENT_SECRET=$HARUFIT_GOOGLE_CLIENT_SECRET
+            GITHUB_CLIENT_ID=$HARUFIT_GITHUB_CLIENT_ID
+            GITHUB_CLIENT_SECRET=$HARUFIT_GITHUB_CLIENT_SECRET
+            EOF
+
+            grep -q '^WEB_ORIGIN=https://' .env || { echo "WEB_ORIGIN must be an HTTPS URL"; exit 1; }
+            grep -q '^API_ORIGIN=https://' .env || { echo "API_ORIGIN must be an HTTPS URL"; exit 1; }
+            grep -q '^HOST_PORT=' .env || { echo "HOST_PORT is missing"; exit 1; }
+            grep -q '^GOOGLE_CLIENT_ID=' .env || { echo "GOOGLE_CLIENT_ID is missing"; exit 1; }
+            grep -q '^GOOGLE_CLIENT_SECRET=' .env || { echo "GOOGLE_CLIENT_SECRET is missing"; exit 1; }
+            grep -q '^GITHUB_CLIENT_ID=' .env || { echo "GITHUB_CLIENT_ID is missing"; exit 1; }
+            grep -q '^GITHUB_CLIENT_SECRET=' .env || { echo "GITHUB_CLIENT_SECRET is missing"; exit 1; }
+
+            npm ci --no-audit --fund=false
+            npm run build
+
+            if command -v pm2 >/dev/null 2>&1; then
+              pm2 delete harufit 2>/dev/null || true
+              env $(grep -v '^#' .env | xargs) pm2 start server/index.mjs --name harufit
+              pm2 save
+            else
+              echo "pm2 is missing on the server"
+              exit 1
+            fi
+
+            sudo systemctl reload nginx 2>/dev/null || true
