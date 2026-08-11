@@ -114,14 +114,6 @@ function ErrorBlock({ message }: { message: string }) {
 function LoginPage() {
   const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams()
   const authFailed = searchParams.get('auth') === 'failed'
-  const authReason = searchParams.get('reason')
-  const authHelp = authReason === 'invalid_client'
-    ? 'Google client secret이 현재 OAuth 클라이언트와 맞지 않습니다.'
-    : authReason === 'invalid_grant'
-      ? 'callback URL 또는 이미 사용된 로그인 코드 문제입니다. Google 리디렉션 URI를 다시 확인하고 로그인 버튼으로 새로 시도하세요.'
-      : authReason === 'redirect_uri_mismatch'
-        ? 'Google 승인된 리디렉션 URI가 서버 callback URL과 다릅니다.'
-        : 'OAuth callback URL과 client secret을 확인하세요.'
   const login = (provider: 'github' | 'google') => {
     window.location.href = `/api/auth/${provider}`
   }
@@ -135,11 +127,6 @@ function LoginPage() {
             <div style={{ fontSize: 26, fontWeight: 900, color: C.white, letterSpacing: '-0.02em', lineHeight: 1 }}>하루핏</div>
           </div>
         </div>
-        {authFailed && (
-          <div style={{ marginBottom: 14, padding: '10px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: '#141414', color: C.mintMuted, fontSize: 12, lineHeight: 1.5 }}>
-            로그인에 실패했습니다. {authHelp}
-          </div>
-        )}
         <button onClick={() => login('github')} style={{ width: '100%', padding: '13px 16px', borderRadius: 10, border: '1px solid #30363d', background: '#24292f', color: C.white, cursor: 'pointer', fontSize: 13, fontWeight: 800, marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
           <IcoGitHubBrand />
           <span>GitHub로 계속하기</span>
@@ -148,6 +135,11 @@ function LoginPage() {
           <IcoGoogleBrand />
           <span>Google로 계속하기</span>
         </button>
+        {authFailed && (
+          <div style={{ marginTop: 14, padding: '10px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: '#141414', color: C.mintMuted, fontSize: 12, lineHeight: 1.5, textAlign: 'center' }}>
+            로그인에 실패했습니다.
+          </div>
+        )}
       </div>
     </div>
   )
