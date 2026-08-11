@@ -955,6 +955,7 @@ function DevicesPage() {
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
   const [connectToken, setConnectToken] = useState('')
+  const [watchInfo, setWatchInfo] = useState(false)
 
   const refresh = () => api.devices().then(setDevices).catch((err) => setError(err.message))
 
@@ -1065,13 +1066,6 @@ function DevicesPage() {
         command: '',
       }
     }
-    if (pendingDevice?.kind === 'watch') {
-      return {
-        title: '웨어러블 연결 코드',
-        description: 'Health Connect 연동 앱에서 이 코드를 입력하면 걸음과 운동 기록이 이 계정에 저장됩니다.',
-        command: '',
-      }
-    }
     return {
       title: '기기 연결 코드',
       description: '다른 기기에서 이 코드를 입력하면 현재 로그인한 계정에 연결됩니다.',
@@ -1153,9 +1147,9 @@ function DevicesPage() {
             { label: '현재 노트북 등록', sub: '이 브라우저', kind: 'computer', name: '노트북', direct: true, Illu: () => <IlluLaptop dim /> },
             { label: '현재 휴대폰 연결', sub: '이 브라우저', kind: 'phone', name: '휴대폰', direct: true, Illu: () => <IlluPhone dim /> },
             { label: '노트북 트래커 설치', sub: '사용 시간 측정', kind: 'computer', name: '노트북 트래커', platform: 'Windows', direct: false, Illu: () => <IlluLaptop dim /> },
-            { label: '워치 추가', sub: 'Health Connect', kind: 'watch', name: 'Health Connect', platform: 'Wear OS', direct: false, Illu: () => <IlluWatch dim /> },
+            { label: '워치 연결', sub: '휴대폰 Health Connect', kind: 'watch', name: 'Health Connect', direct: false, info: true, Illu: () => <IlluWatch dim /> },
           ].map((item) => (
-            <button key={item.label} onClick={() => item.direct ? connectCurrentDevice(item) : startPairing(item)} style={{
+            <button key={item.label} onClick={() => item.info ? setWatchInfo(true) : item.direct ? connectCurrentDevice(item) : startPairing(item)} style={{
               padding: '16px', background: C.surface, borderRadius: 12,
               border: `1px dashed ${C.border2}`, cursor: 'pointer', textAlign: 'left',
               transition: 'border-color 120ms',
@@ -1194,6 +1188,36 @@ function DevicesPage() {
               <button onClick={copyPairingToken} style={{ flex: 1, padding: '9px 14px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.surface, color: C.muted, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>{copied ? '복사됨' : '코드 복사'}</button>
               <button onClick={completePairing} style={{ flex: 1, padding: '9px 14px', borderRadius: 8, border: 'none', background: C.mint, color: C.ink, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>현재 기기로 테스트</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {watchInfo && (
+        <div onClick={() => setWatchInfo(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: C.raised, borderRadius: 20, padding: '34px', border: `1px solid ${C.border2}`, textAlign: 'left', maxWidth: 430, width: 'calc(100% - 32px)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
+              <IlluWatch />
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: C.white, marginBottom: 4 }}>워치 연결</div>
+                <div style={{ fontSize: 11, color: C.alt }}>휴대폰 Health Connect를 통해 가져옵니다.</div>
+              </div>
+            </div>
+            <div style={{ display: 'grid', gap: 10, marginBottom: 20 }}>
+              {[
+                '휴대폰에서 하루핏에 로그인합니다.',
+                '하루핏 모바일 앱에서 Health Connect 권한을 허용합니다.',
+                '걸음, 운동, 활동 시간 데이터가 계정에 저장됩니다.',
+              ].map((text, index) => (
+                <div key={text} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px 14px' }}>
+                  <div style={{ width: 22, height: 22, borderRadius: 7, background: 'rgba(0,232,197,0.12)', color: C.mint, fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{index + 1}</div>
+                  <div style={{ color: C.muted, fontSize: 12, lineHeight: 1.7 }}>{text}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ color: C.alt, fontSize: 11, lineHeight: 1.8, marginBottom: 22 }}>
+              워치 이름이나 모델명은 웹에서 직접 가져올 수 없습니다. 모바일 앱 연동 후에도 Health Connect가 제공하는 데이터 출처 범위 안에서만 표시할 수 있습니다.
+            </div>
+            <button onClick={() => setWatchInfo(false)} style={{ width: '100%', padding: '11px 14px', borderRadius: 10, border: 'none', background: C.mint, color: C.ink, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>확인</button>
           </div>
         </div>
       )}
