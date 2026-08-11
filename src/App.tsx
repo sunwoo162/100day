@@ -1016,6 +1016,23 @@ function DevicesPage() {
     sync: shortTime(device.last_sync),
     Illu: illustration(device.kind),
   }))
+  const currentPlatform = () => {
+    const ua = navigator.userAgent
+    if (/Android/i.test(ua)) return 'Android'
+    if (/iPhone|iPad|iPod/i.test(ua)) return 'iOS'
+    if (/Windows/i.test(ua)) return 'Windows'
+    if (/Mac/i.test(ua)) return 'macOS'
+    return 'Browser'
+  }
+  const connectCurrentDevice = async (device: { kind: string; name: string }) => {
+    setError('')
+    try {
+      await api.connectCurrentDevice({ ...device, platform: currentPlatform() })
+      await refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '현재 기기 연결 실패')
+    }
+  }
   const pairingGuide = (() => {
     if (pendingDevice?.kind === 'computer') {
       return {
@@ -1075,11 +1092,12 @@ function DevicesPage() {
         <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 18 }}>계정에 기기 추가</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
           {[
-            { label: '노트북 추가', sub: 'Windows 트래커', kind: 'computer', name: '노트북 트래커', platform: 'Windows', Illu: () => <IlluLaptop dim /> },
-            { label: '휴대폰 추가', sub: '모바일 앱', kind: 'phone', name: '휴대폰 앱', platform: 'Android', Illu: () => <IlluPhone  dim /> },
-            { label: '워치 추가', sub: 'Health Connect', kind: 'watch', name: 'Health Connect', platform: 'Wear OS', Illu: () => <IlluWatch  dim /> },
+            { label: '현재 노트북 등록', sub: '이 브라우저', kind: 'computer', name: '노트북', direct: true, Illu: () => <IlluLaptop dim /> },
+            { label: '현재 휴대폰 연결', sub: '이 브라우저', kind: 'phone', name: '휴대폰', direct: true, Illu: () => <IlluPhone dim /> },
+            { label: '노트북 트래커 설치', sub: '사용 시간 측정', kind: 'computer', name: '노트북 트래커', platform: 'Windows', direct: false, Illu: () => <IlluLaptop dim /> },
+            { label: '워치 추가', sub: 'Health Connect', kind: 'watch', name: 'Health Connect', platform: 'Wear OS', direct: false, Illu: () => <IlluWatch dim /> },
           ].map((item) => (
-            <button key={item.label} onClick={() => startPairing(item)} style={{
+            <button key={item.label} onClick={() => item.direct ? connectCurrentDevice(item) : startPairing(item)} style={{
               padding: '16px', background: C.surface, borderRadius: 12,
               border: `1px dashed ${C.border2}`, cursor: 'pointer', textAlign: 'left',
               transition: 'border-color 120ms',

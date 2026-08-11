@@ -119,6 +119,7 @@ export const api = {
   analytics: (days = 30) => request<AnalyticsData>(`/analytics?days=${days}`),
   devices: () => request<DeviceData[]>('/devices'),
   createDevicePairing: (data: { kind: string; name: string; platform: string }) => request<DevicePairingData>('/devices/pairing', { method: 'POST', body: JSON.stringify(data) }),
+  connectCurrentDevice: (data: { kind: string; name: string; platform: string }) => request<DeviceData>('/devices/current', { method: 'POST', body: JSON.stringify(data) }),
   connectDevice: (data: { token: string }) => request<DeviceData>('/devices/connect', { method: 'POST', body: JSON.stringify(data) }),
   disconnectDevice: (id: number) => request<void>(`/devices/${id}`, { method: 'DELETE' }),
   studyCategories: () => request<StudyCategory[]>('/study/categories'),

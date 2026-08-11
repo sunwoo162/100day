@@ -412,6 +412,20 @@ const server = http.createServer(async (req, res) => {
       return json(res, 201, { token, expires_at: expires.toISOString() })
     }
 
+    if (url.pathname === '/api/devices/current' && req.method === 'POST') {
+      const user = requireUser(req, res); if (!user) return
+      const body = await readBody(req)
+      const kind = String(body.kind || 'computer').trim().slice(0, 40) || 'computer'
+      const name = String(body.name || '현재 기기').trim().slice(0, 80) || '현재 기기'
+      const platform = String(body.platform || req.headers['user-agent'] || 'Browser').trim().slice(0, 120) || 'Browser'
+      const now = new Date().toISOString()
+      const deviceToken = crypto.randomBytes(32).toString('base64url')
+      const result = db.prepare('INSERT INTO devices (user_id, kind, name, platform, status, device_token, last_sync, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(user.id, kind, name, platform, 'connected', deviceToken, now, 'browser')
+      const device = db.prepare('SELECT * FROM devices WHERE id = ?').get(Number(result.lastInsertRowid))
+      return json(res, 201, { ...device, device_token: deviceToken })
+    }
+
     if (url.pathname === '/api/devices/connect' && req.method === 'POST') {
       const body = await readBody(req)
       const token = String(body.token || '').trim()
