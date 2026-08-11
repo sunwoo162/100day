@@ -143,3 +143,19 @@ GET  /api/result
 3. Android Companion → UsageStats
 4. Health Connect → steps/exercise/watch data
 5. GitHub OAuth/API → commit/PR activity
+
+### Windows PC 사용 시간 트래커
+
+앱의 `기기` 화면에서 `트래커 설치`를 눌러 연결 코드를 만든 뒤 실행합니다.
+
+```powershell
+pnpm run tracker:windows -- -PairingToken 연결코드
+```
+
+이후에는 저장된 기기 토큰으로 계속 실행할 수 있습니다.
+
+```powershell
+pnpm run tracker:windows
+```
+
+트래커는 1분마다 현재 활성 창을 확인하고, 3분 이상 입력이 없으면 유휴 상태로 보고 기록하지 않습니다.

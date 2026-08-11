@@ -101,6 +101,7 @@ CREATE TABLE IF NOT EXISTS devices (
   name TEXT NOT NULL,
   platform TEXT NOT NULL,
   status TEXT NOT NULL,
+  device_token TEXT UNIQUE,
   last_sync TEXT,
   source TEXT,
   FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -171,6 +172,10 @@ if (studyCategorySql.includes('name TEXT NOT NULL UNIQUE')) {
 
 const focusColumns = db.prepare('PRAGMA table_info(focus_sessions)').all().map(column => column.name)
 if (!focusColumns.includes('note')) db.exec("ALTER TABLE focus_sessions ADD COLUMN note TEXT NOT NULL DEFAULT ''")
+
+const deviceColumns = db.prepare('PRAGMA table_info(devices)').all().map(column => column.name)
+if (!deviceColumns.includes('device_token')) db.exec('ALTER TABLE devices ADD COLUMN device_token TEXT')
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_devices_device_token ON devices(device_token)')
 
 if (db.prepare('SELECT COUNT(*) AS count FROM challenges').get().count === 0) {
   db.prepare('INSERT INTO challenges (id, user_id, name, start_date, target_days) VALUES (1, NULL, ?, ?, 100)')

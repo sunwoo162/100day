@@ -139,6 +139,25 @@ function requireUser(req, res) {
   ensureUserDefaults(user.id)
   return user
 }
+function bearerToken(req) {
+  const header = req.headers.authorization || ''
+  const match = String(header).match(/^Bearer\s+(.+)$/i)
+  return match?.[1]?.trim() || ''
+}
+function requireDevice(req, res) {
+  const token = bearerToken(req)
+  if (!token) {
+    json(res, 401, { error: '기기 토큰이 필요합니다' })
+    return null
+  }
+  const device = db.prepare('SELECT * FROM devices WHERE device_token = ? AND status = ?').get(token, 'connected')
+  if (!device) {
+    json(res, 401, { error: '유효하지 않은 기기 토큰입니다' })
+    return null
+  }
+  ensureUserDefaults(device.user_id)
+  return device
+}
 function emptyMetric(day, challenge) {
   const date = new Date(`${challenge.start_date}T00:00:00+09:00`)
   date.setDate(date.getDate() + day - 1)
@@ -166,6 +185,12 @@ function ensureMetric(userId, challenge, day) {
     (user_id, challenge_id, day_number, date, pc_minutes, phone_minutes, focus_minutes, sleep_minutes, steps, exercise_minutes, development_minutes, github_commits)
     VALUES (?, ?, ?, ?, 0, 0, 0, 0, 0, 0, 0, 0)`).run(userId, challenge.id, day, metric.date)
   return db.prepare('SELECT * FROM daily_metrics WHERE user_id = ? AND challenge_id = ? AND day_number = ?').get(userId, challenge.id, day)
+}
+function dayForDate(challenge, dateText) {
+  const start = new Date(`${challenge.start_date}T00:00:00+09:00`)
+  const date = new Date(`${dateText}T00:00:00+09:00`)
+  const diff = Math.floor((date.getTime() - start.getTime()) / 86400000) + 1
+  return Math.max(1, Math.min(challenge.target_days, diff))
 }
 function ensureUserDefaults(userId) {
   getUserChallenge(userId)
@@ -327,7 +352,12 @@ const server = http.createServer(async (req, res) => {
       const day = requestedDay(url, challenge)
       const metric = getMetric(user.id, challenge, day)
       const prev = getMetric(user.id, challenge, Math.max(1, day - 1))
-      const apps = db.prepare('SELECT app_name AS name, source, minutes FROM app_usage WHERE user_id = ? AND day_number = ? ORDER BY minutes DESC LIMIT 8').all(user.id, day)
+      const apps = db.prepare(`SELECT app_name AS name, source, SUM(minutes) AS minutes
+        FROM app_usage
+        WHERE user_id = ? AND day_number = ?
+        GROUP BY app_name, source
+        ORDER BY minutes DESC
+        LIMIT 8`).all(user.id, day)
       const events = db.prepare('SELECT time, label, type FROM timeline_events WHERE user_id = ? AND day_number = ? ORDER BY time').all(user.id, day)
       const recent = db.prepare('SELECT * FROM daily_metrics WHERE user_id = ? AND challenge_id = ? AND day_number <= ? ORDER BY day_number DESC LIMIT 7').all(user.id, challenge.id, day).reverse()
       return json(res, 200, {
@@ -388,10 +418,32 @@ const server = http.createServer(async (req, res) => {
       const pairing = db.prepare('SELECT * FROM device_pairings WHERE token = ? AND used_at IS NULL AND expires_at > ?').get(token, new Date().toISOString())
       if (!pairing) return json(res, 400, { error: '유효하지 않거나 만료된 연결 코드입니다' })
       const now = new Date().toISOString()
-      const result = db.prepare('INSERT INTO devices (user_id, kind, name, platform, status, last_sync, source) VALUES (?, ?, ?, ?, ?, ?, ?)')
-        .run(pairing.user_id, pairing.kind, pairing.name, pairing.platform, 'connected', now, 'pairing')
+      const deviceToken = crypto.randomBytes(32).toString('base64url')
+      const result = db.prepare('INSERT INTO devices (user_id, kind, name, platform, status, device_token, last_sync, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(pairing.user_id, pairing.kind, pairing.name, pairing.platform, 'connected', deviceToken, now, 'pairing')
       db.prepare('UPDATE device_pairings SET used_at = ? WHERE id = ?').run(now, pairing.id)
-      return json(res, 201, db.prepare('SELECT * FROM devices WHERE id = ?').get(Number(result.lastInsertRowid)))
+      const device = db.prepare('SELECT * FROM devices WHERE id = ?').get(Number(result.lastInsertRowid))
+      return json(res, 201, { ...device, device_token: deviceToken })
+    }
+
+    if (url.pathname === '/api/track/pc' && req.method === 'POST') {
+      const device = requireDevice(req, res); if (!device) return
+      const body = await readBody(req)
+      const minutes = Math.max(0, Math.min(240, Number(body.minutes || 0)))
+      if (!minutes) return json(res, 400, { error: 'minutes 값이 필요합니다' })
+      const appName = String(body.app_name || 'Unknown').trim().slice(0, 120) || 'Unknown'
+      const occurredAt = body.occurred_at ? new Date(body.occurred_at) : new Date()
+      const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(occurredAt)
+      const challenge = getUserChallenge(device.user_id)
+      const day = dayForDate(challenge, date)
+      ensureMetric(device.user_id, challenge, day)
+      db.prepare('UPDATE daily_metrics SET pc_minutes = pc_minutes + ? WHERE user_id = ? AND challenge_id = ? AND day_number = ?')
+        .run(minutes, device.user_id, challenge.id, day)
+      db.prepare('INSERT INTO app_usage (user_id, day_number, source, app_name, minutes) VALUES (?, ?, ?, ?, ?)')
+        .run(device.user_id, day, 'pc', appName, minutes)
+      db.prepare('UPDATE devices SET last_sync = ?, source = ? WHERE id = ?')
+        .run(new Date().toISOString(), 'pc-tracker', device.id)
+      return json(res, 201, { ok: true, day_number: day, minutes })
     }
 
     const deleteDevice = url.pathname.match(/^\/api\/devices\/(\d+)$/)

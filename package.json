@@ -11,7 +11,8 @@
     "format": "oxfmt",
     "dev:web": "vite --host 0.0.0.0",
     "dev:api": "node server/index.mjs",
-    "db:reset": "node server/reset-db.mjs"
+    "db:reset": "node server/reset-db.mjs",
+    "tracker:windows": "powershell -ExecutionPolicy Bypass -File scripts/windows-pc-tracker.ps1"
   },
   "dependencies": {
     "react": "^19.0.0",
