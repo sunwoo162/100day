@@ -955,47 +955,11 @@ function DevicesPage() {
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
   const [connectToken, setConnectToken] = useState('')
-  const [watchInfo, setWatchInfo] = useState(false)
   const [lockedDevice, setLockedDevice] = useState<{ title: string; description: string } | null>(null)
 
   const refresh = () => api.devices().then(setDevices).catch((err) => setError(err.message))
 
   useEffect(() => { refresh() }, [])
-
-  return (
-    <div style={{ padding: '32px 36px' }}>
-      <div style={{ fontSize: 32, fontWeight: 900, color: C.white, letterSpacing: '-0.02em', marginBottom: 28 }}>기기 연결</div>
-      <div style={{ background: C.raised, borderRadius: 14, padding: '28px', border: `1px solid ${C.border}`, marginBottom: 18 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
-          <div style={{ width: 42, height: 42, borderRadius: 12, background: 'rgba(0,232,197,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <IcoDevice c={C.mint} />
-          </div>
-          <div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: C.white, marginBottom: 4 }}>v2에서 연결됩니다</div>
-            <div style={{ fontSize: 12, color: C.alt }}>PC, 노트북, 태블릿, 휴대폰, 워치 자동 기록은 현재 잠겨 있습니다.</div>
-          </div>
-        </div>
-        <div style={{ color: C.muted, fontSize: 13, lineHeight: 1.8 }}>
-          디바이스별 자동 기록은 OS 권한, 백그라운드 실행, 네이티브 앱 연동이 필요해서 v2에서 한 번에 연결합니다.
-          지금 버전에서는 계정 기반 데이터 저장과 화면 구조만 유지합니다.
-        </div>
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
-        {[
-          ['PC/노트북', '백그라운드 트래커 필요'],
-          ['휴대폰', 'Android Usage Access 필요'],
-          ['태블릿', '네이티브 앱 필요'],
-          ['워치', 'Health Connect 필요'],
-        ].map(([label, sub]) => (
-          <div key={label} style={{ padding: 16, background: C.surface, borderRadius: 12, border: `1px dashed ${C.border}`, opacity: 0.62 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 4 }}>{label}</div>
-            <div style={{ fontSize: 10, color: C.alt }}>{sub}</div>
-            <div style={{ display: 'inline-block', marginTop: 12, fontSize: 9, color: C.mint, border: `1px solid ${C.border2}`, borderRadius: 5, padding: '2px 5px', fontFamily: "'JetBrains Mono', monospace" }}>LOCKED</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
 
   const startPairing = async (device: { kind: string; name: string; platform: string }) => {
     setError('')

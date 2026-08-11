@@ -118,6 +118,7 @@ POST /api/devices/pairing
 POST /api/devices/connect
 POST /api/track/pc
 POST /api/track/phone
+POST /api/track/health
 GET  /api/study/categories
 POST /api/study/categories
 GET  /api/focus/sessions
@@ -140,7 +141,7 @@ GET  /api/result
 
 ## 디바이스 자동 기록
 
-현재 앱은 목데이터 없이 실제 저장된 기록만 표시합니다. 디바이스 자동 연결은 v2까지 화면에서 잠겨 있으며, 이후 각각의 수집기가 같은 API/DB 모델로 데이터를 보내도록 연결합니다.
+현재 앱은 목데이터 없이 실제 저장된 기록만 표시합니다. PC/노트북은 Windows 트래커로 실제 측정하며, 휴대폰/태블릿/워치는 네이티브 앱이 필요한 수집 계약을 서버에 준비해 둡니다.
 
 1. Windows Desktop Tracker → PC/app usage
 2. Chrome Extension → website usage
