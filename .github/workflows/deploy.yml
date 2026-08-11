@@ -1,0 +1,60 @@
+name: Deploy Harufit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [develop]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build check
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm ci --no-audit --fund=false
+
+      - name: Build
+        run: npm run build
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          script: |
+            set -e
+
+            APP_DIR=/home/ubuntu/harufit
+            REPO_URL=https://github.com/sunwoo162/100day.git
+            BRANCH=develop
+
+            if [ ! -d "$APP_DIR/.git" ]; then
+              rm -rf "$APP_DIR"
+              git clone --branch "$BRANCH" "$REPO_URL" "$APP_DIR"
+            fi
+
+            cd "$APP_DIR"
+            git fetch origin "$BRANCH"
+            git reset --hard "origin/$BRANCH"
+
+            test -f .env || { echo ".env is missing in $APP_DIR"; exit 1; }
+            grep -q '^WEB_ORIGIN=https://' .env || { echo "WEB_ORIGIN must be an HTTPS URL"; exit 1; }
+            grep -q '^API_ORIGIN=https://' .env || { echo "API_ORIGIN must be an HTTPS URL"; exit 1; }
+            grep -q '^HOST_PORT=' .env || { echo "HOST_PORT is missing"; exit 1; }
+            grep -q '^GOOGLE_CLIENT_ID=' .env || { echo "GOOGLE_CLIENT_ID is missing"; exit 1; }
+            grep -q '^GOOGLE_CLIENT_SECRET=' .env || { echo "GOOGLE_CLIENT_SECRET is missing"; exit 1; }
+            grep -q '^GITHUB_CLIENT_ID=' .env || { echo "GITHUB_CLIENT_ID is missing"; exit 1; }
+            grep -q '^GITHUB_CLIENT_SECRET=' .env || { echo "GITHUB_CLIENT_SECRET is missing"; exit 1; }
+
+            docker compose up -d --build
+            docker compose ps
