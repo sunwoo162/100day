@@ -62,7 +62,7 @@ jobs:
             test -n "$HARUFIT_GITHUB_CLIENT_SECRET" || { echo "HARUFIT_GITHUB_CLIENT_SECRET secret is missing"; exit 1; }
 
             cat > .env <<EOF
-            API_PORT=4000
+            API_PORT=$HARUFIT_HOST_PORT
             HOST_PORT=$HARUFIT_HOST_PORT
             WEB_ORIGIN=$HARUFIT_WEB_ORIGIN
             API_ORIGIN=$HARUFIT_API_ORIGIN
@@ -90,6 +90,12 @@ jobs:
             else
               echo "pm2 is missing on the server"
               exit 1
+            fi
+
+            if [ -f deploy/nginx.harufit.conf ]; then
+              sudo cp deploy/nginx.harufit.conf /etc/nginx/sites-available/harufit
+              sudo ln -sf /etc/nginx/sites-available/harufit /etc/nginx/sites-enabled/harufit
+              sudo nginx -t
             fi
 
             sudo systemctl reload nginx 2>/dev/null || true
