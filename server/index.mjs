@@ -69,6 +69,14 @@ function serveStatic(req, res, url) {
   }
   return staticFile(res, filePath)
 }
+function authErrorReason(error) {
+  const message = error?.message || ''
+  if (message.includes('invalid_client')) return 'invalid_client'
+  if (message.includes('invalid_grant')) return 'invalid_grant'
+  if (message.includes('redirect_uri_mismatch')) return 'redirect_uri_mismatch'
+  if (message.includes('unauthorized_client')) return 'unauthorized_client'
+  return 'token_exchange_failed'
+}
 function todayKst() {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Seoul',
@@ -298,7 +306,8 @@ const server = http.createServer(async (req, res) => {
         ])
       } catch (error) {
         console.error(`${provider} OAuth callback failed:`, error)
-        return redirect(res, `${WEB_ORIGIN}/?auth=failed&provider=${provider}`, [
+        const reason = authErrorReason(error)
+        return redirect(res, `${WEB_ORIGIN}/?auth=failed&provider=${provider}&reason=${reason}`, [
           'oauth_state=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0',
         ])
       }
