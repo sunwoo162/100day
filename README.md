@@ -115,7 +115,6 @@ GET  /api/timeline
 GET  /api/analytics?days=30
 GET  /api/devices
 POST /api/devices/pairing
-POST /api/devices/current
 POST /api/devices/connect
 POST /api/track/pc
 POST /api/track/phone
@@ -139,9 +138,9 @@ GET  /api/result
 }
 ```
 
-## 이후 실제 디바이스 연결
+## 디바이스 자동 기록
 
-현재 앱은 목데이터 없이 실제 저장된 기록만 표시합니다. 아직 자동 수집기가 없는 항목은 0 또는 빈 목록으로 표시되며, 이후 각각의 수집기가 같은 API/DB 모델로 데이터를 보내도록 연결합니다.
+현재 앱은 목데이터 없이 실제 저장된 기록만 표시합니다. 디바이스 자동 연결은 v2까지 화면에서 잠겨 있으며, 이후 각각의 수집기가 같은 API/DB 모델로 데이터를 보내도록 연결합니다.
 
 1. Windows Desktop Tracker → PC/app usage
 2. Chrome Extension → website usage

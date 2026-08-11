@@ -956,10 +956,46 @@ function DevicesPage() {
   const [copied, setCopied] = useState(false)
   const [connectToken, setConnectToken] = useState('')
   const [watchInfo, setWatchInfo] = useState(false)
+  const [lockedDevice, setLockedDevice] = useState<{ title: string; description: string } | null>(null)
 
   const refresh = () => api.devices().then(setDevices).catch((err) => setError(err.message))
 
   useEffect(() => { refresh() }, [])
+
+  return (
+    <div style={{ padding: '32px 36px' }}>
+      <div style={{ fontSize: 32, fontWeight: 900, color: C.white, letterSpacing: '-0.02em', marginBottom: 28 }}>기기 연결</div>
+      <div style={{ background: C.raised, borderRadius: 14, padding: '28px', border: `1px solid ${C.border}`, marginBottom: 18 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
+          <div style={{ width: 42, height: 42, borderRadius: 12, background: 'rgba(0,232,197,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <IcoDevice c={C.mint} />
+          </div>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.white, marginBottom: 4 }}>v2에서 연결됩니다</div>
+            <div style={{ fontSize: 12, color: C.alt }}>PC, 노트북, 태블릿, 휴대폰, 워치 자동 기록은 현재 잠겨 있습니다.</div>
+          </div>
+        </div>
+        <div style={{ color: C.muted, fontSize: 13, lineHeight: 1.8 }}>
+          디바이스별 자동 기록은 OS 권한, 백그라운드 실행, 네이티브 앱 연동이 필요해서 v2에서 한 번에 연결합니다.
+          지금 버전에서는 계정 기반 데이터 저장과 화면 구조만 유지합니다.
+        </div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
+        {[
+          ['PC/노트북', '백그라운드 트래커 필요'],
+          ['휴대폰', 'Android Usage Access 필요'],
+          ['태블릿', '네이티브 앱 필요'],
+          ['워치', 'Health Connect 필요'],
+        ].map(([label, sub]) => (
+          <div key={label} style={{ padding: 16, background: C.surface, borderRadius: 12, border: `1px dashed ${C.border}`, opacity: 0.62 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 4 }}>{label}</div>
+            <div style={{ fontSize: 10, color: C.alt }}>{sub}</div>
+            <div style={{ display: 'inline-block', marginTop: 12, fontSize: 9, color: C.mint, border: `1px solid ${C.border2}`, borderRadius: 5, padding: '2px 5px', fontFamily: "'JetBrains Mono', monospace" }}>LOCKED</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 
   const startPairing = async (device: { kind: string; name: string; platform: string }) => {
     setError('')
@@ -1034,23 +1070,6 @@ function DevicesPage() {
     sync: shortTime(device.last_sync),
     Illu: illustration(device.kind),
   }))
-  const currentPlatform = () => {
-    const ua = navigator.userAgent
-    if (/Android/i.test(ua)) return 'Android'
-    if (/iPhone|iPad|iPod/i.test(ua)) return 'iOS'
-    if (/Windows/i.test(ua)) return 'Windows'
-    if (/Mac/i.test(ua)) return 'macOS'
-    return 'Browser'
-  }
-  const connectCurrentDevice = async (device: { kind: string; name: string }) => {
-    setError('')
-    try {
-      await api.connectCurrentDevice({ ...device, platform: currentPlatform() })
-      await refresh()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '현재 기기 연결 실패')
-    }
-  }
   const pairingGuide = (() => {
     if (pendingDevice?.kind === 'computer') {
       return {
@@ -1144,18 +1163,22 @@ function DevicesPage() {
         <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 18 }}>계정에 기기 추가</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
           {[
-            { label: '현재 노트북 등록', sub: '이 브라우저', kind: 'computer', name: '노트북', direct: true, Illu: () => <IlluLaptop dim /> },
-            { label: '휴대폰 연결', sub: 'Android 사용시간 측정', kind: 'phone', name: '휴대폰 사용량 트래커', platform: 'Android Usage Access', direct: false, Illu: () => <IlluPhone dim /> },
-            { label: '노트북 트래커 설치', sub: '사용 시간 측정', kind: 'computer', name: '노트북 트래커', platform: 'Windows', direct: false, Illu: () => <IlluLaptop dim /> },
-            { label: '워치 연결', sub: '휴대폰 Health Connect', kind: 'watch', name: 'Health Connect', direct: false, info: true, Illu: () => <IlluWatch dim /> },
+            { label: 'PC/노트북 연결', sub: 'Windows 시간 측정', kind: 'computer', name: '노트북 트래커', platform: 'Windows', Illu: () => <IlluLaptop dim /> },
+            { label: '휴대폰 연결', sub: 'v2 Android 앱 필요', kind: 'phone', locked: true, lockText: '휴대폰 사용시간은 웹에서 읽을 수 없어서 Android 앱과 Usage Access 권한이 필요합니다.', Illu: () => <IlluPhone dim /> },
+            { label: '태블릿 연결', sub: 'v2 Android/iPad 앱 필요', kind: 'tablet', locked: true, lockText: '태블릿 사용시간도 OS 권한이 필요해서 v2 네이티브 앱에서 연결합니다.', Illu: () => <IlluPhone dim /> },
+            { label: '워치 연결', sub: 'v2 Health Connect 필요', kind: 'watch', locked: true, lockText: '워치는 휴대폰 앱이 Health Connect 권한을 받아 걸음과 운동 데이터를 가져오는 방식으로 연결합니다.', Illu: () => <IlluWatch dim /> },
           ].map((item) => (
-            <button key={item.label} onClick={() => item.info ? setWatchInfo(true) : item.direct ? connectCurrentDevice(item) : startPairing(item)} style={{
+            <button key={item.label} onClick={() => item.locked ? setLockedDevice({ title: item.label, description: item.lockText || '' }) : startPairing(item)} style={{
               padding: '16px', background: C.surface, borderRadius: 12,
-              border: `1px dashed ${C.border2}`, cursor: 'pointer', textAlign: 'left',
+              border: `1px dashed ${item.locked ? C.border : C.border2}`, cursor: 'pointer', textAlign: 'left',
+              opacity: item.locked ? 0.62 : 1,
               transition: 'border-color 120ms',
             }}>
               <div style={{ marginBottom: 10 }}><item.Illu /></div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 2, fontFamily: "'Pretendard', system-ui, sans-serif" }}>{item.label}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: C.muted, fontFamily: "'Pretendard', system-ui, sans-serif" }}>{item.label}</div>
+                {item.locked && <div style={{ fontSize: 9, color: C.mint, border: `1px solid ${C.border2}`, borderRadius: 5, padding: '2px 5px', fontFamily: "'JetBrains Mono', monospace" }}>v2</div>}
+              </div>
               <div style={{ fontSize: 10, color: '#3a3a3a', fontFamily: "'Pretendard', system-ui, sans-serif" }}>{item.sub}</div>
             </button>
           ))}
@@ -1192,21 +1215,16 @@ function DevicesPage() {
         </div>
       )}
 
-      {watchInfo && (
-        <div onClick={() => setWatchInfo(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+      {lockedDevice && (
+        <div onClick={() => setLockedDevice(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: C.raised, borderRadius: 20, padding: '34px', border: `1px solid ${C.border2}`, textAlign: 'left', maxWidth: 430, width: 'calc(100% - 32px)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
-              <IlluWatch />
-              <div>
-                <div style={{ fontSize: 18, fontWeight: 800, color: C.white, marginBottom: 4 }}>워치 연결</div>
-                <div style={{ fontSize: 11, color: C.alt }}>휴대폰 Health Connect를 통해 가져옵니다.</div>
-              </div>
-            </div>
-            <div style={{ display: 'grid', gap: 10, marginBottom: 20 }}>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.white, marginBottom: 8 }}>{lockedDevice.title}</div>
+            <div style={{ color: C.alt, fontSize: 12, lineHeight: 1.8, marginBottom: 18 }}>{lockedDevice.description}</div>
+            <div style={{ display: 'grid', gap: 10, marginBottom: 22 }}>
               {[
-                '휴대폰에서 하루핏에 로그인합니다.',
-                '하루핏 모바일 앱에서 Health Connect 권한을 허용합니다.',
-                '걸음, 운동, 활동 시간 데이터가 계정에 저장됩니다.',
+                'v1에서는 PC/노트북 Windows 트래커부터 실제 측정합니다.',
+                '휴대폰, 태블릿, 워치는 OS 권한이 필요한 네이티브 앱 기능으로 분리합니다.',
+                'v2 앱에서 권한 승인 후 이 계정으로 자동 기록을 전송합니다.',
               ].map((text, index) => (
                 <div key={text} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px 14px' }}>
                   <div style={{ width: 22, height: 22, borderRadius: 7, background: 'rgba(0,232,197,0.12)', color: C.mint, fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{index + 1}</div>
@@ -1214,10 +1232,7 @@ function DevicesPage() {
                 </div>
               ))}
             </div>
-            <div style={{ color: C.alt, fontSize: 11, lineHeight: 1.8, marginBottom: 22 }}>
-              워치 이름이나 모델명은 웹에서 직접 가져올 수 없습니다. 모바일 앱 연동 후에도 Health Connect가 제공하는 데이터 출처 범위 안에서만 표시할 수 있습니다.
-            </div>
-            <button onClick={() => setWatchInfo(false)} style={{ width: '100%', padding: '11px 14px', borderRadius: 10, border: 'none', background: C.mint, color: C.ink, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>확인</button>
+            <button onClick={() => setLockedDevice(null)} style={{ width: '100%', padding: '11px 14px', borderRadius: 10, border: 'none', background: C.mint, color: C.ink, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>확인</button>
           </div>
         </div>
       )}
