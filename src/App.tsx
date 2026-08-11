@@ -953,6 +953,7 @@ function DevicesPage() {
   const [pairing, setPairing] = useState<DevicePairingData | null>(null)
   const [pendingDevice, setPendingDevice] = useState<{ kind: string; name: string; platform: string } | null>(null)
   const [error, setError] = useState('')
+  const [copied, setCopied] = useState(false)
 
   const refresh = () => api.devices().then(setDevices).catch((err) => setError(err.message))
 
@@ -960,6 +961,7 @@ function DevicesPage() {
 
   const startPairing = async (device: { kind: string; name: string; platform: string }) => {
     setError('')
+    setCopied(false)
     setPendingDevice(device)
     try {
       const created = await api.createDevicePairing(device)
@@ -968,6 +970,13 @@ function DevicesPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : '기기 연결 코드 생성 실패')
     }
+  }
+
+  const copyPairingToken = async () => {
+    if (!pairing?.token) return
+    await navigator.clipboard.writeText(pairing.token)
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 1400)
   }
 
   const completePairing = async () => {
@@ -1007,6 +1016,34 @@ function DevicesPage() {
     sync: shortTime(device.last_sync),
     Illu: illustration(device.kind),
   }))
+  const pairingGuide = (() => {
+    if (pendingDevice?.kind === 'computer') {
+      return {
+        title: '노트북 연결 코드',
+        description: '이 코드를 노트북 트래커 실행 명령에 넣으면 현재 로그인한 계정에 노트북이 연결됩니다.',
+        command: pairing ? `pnpm run tracker:windows -- -PairingToken ${pairing.token}` : '',
+      }
+    }
+    if (pendingDevice?.kind === 'phone') {
+      return {
+        title: '휴대폰 연결 코드',
+        description: '휴대폰 앱에서 같은 계정 연결 화면을 열고 이 코드를 입력하면 휴대폰 사용 기록이 이 계정에 저장됩니다.',
+        command: '',
+      }
+    }
+    if (pendingDevice?.kind === 'watch') {
+      return {
+        title: '웨어러블 연결 코드',
+        description: 'Health Connect 연동 앱에서 이 코드를 입력하면 걸음과 운동 기록이 이 계정에 저장됩니다.',
+        command: '',
+      }
+    }
+    return {
+      title: '기기 연결 코드',
+      description: '다른 기기에서 이 코드를 입력하면 현재 로그인한 계정에 연결됩니다.',
+      command: '',
+    }
+  })()
 
   return (
     <div style={{ padding: '32px 36px' }}>
@@ -1035,13 +1072,12 @@ function DevicesPage() {
       </div>
 
       <div style={{ background: C.raised, borderRadius: 14, padding: '22px', border: `1px solid ${C.border}` }}>
-        <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 18 }}>추가 연결</div>
+        <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 18 }}>계정에 기기 추가</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
           {[
-            { label: '트래커 설치', sub: 'macOS / Windows', kind: 'computer', name: '데스크톱 트래커', platform: 'macOS / Windows', Illu: () => <IlluLaptop dim /> },
-            { label: 'Android 앱', sub: '연동 앱', kind: 'phone', name: 'Android 앱', platform: 'Android', Illu: () => <IlluPhone  dim /> },
-            { label: 'Health Connect', sub: 'Wear OS', kind: 'watch', name: 'Health Connect', platform: 'Wear OS', Illu: () => <IlluWatch  dim /> },
-            { label: 'GitHub', sub: 'OAuth 연결', kind: 'github', name: 'GitHub', platform: 'GitHub OAuth', Illu: () => <IlluGit dim /> },
+            { label: '노트북 추가', sub: 'Windows 트래커', kind: 'computer', name: '노트북 트래커', platform: 'Windows', Illu: () => <IlluLaptop dim /> },
+            { label: '휴대폰 추가', sub: '모바일 앱', kind: 'phone', name: '휴대폰 앱', platform: 'Android', Illu: () => <IlluPhone  dim /> },
+            { label: '워치 추가', sub: 'Health Connect', kind: 'watch', name: 'Health Connect', platform: 'Wear OS', Illu: () => <IlluWatch  dim /> },
           ].map((item) => (
             <button key={item.label} onClick={() => startPairing(item)} style={{
               padding: '16px', background: C.surface, borderRadius: 12,
@@ -1058,22 +1094,29 @@ function DevicesPage() {
 
       {qr && (
         <div onClick={() => setQr(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: C.raised, borderRadius: 20, padding: '36px', border: `1px solid ${C.border2}`, textAlign: 'center', maxWidth: 320 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: C.white, marginBottom: 6 }}>{pendingDevice?.name || '기기'} 연결</div>
-            <div style={{ fontSize: 11, color: C.alt, marginBottom: 24, lineHeight: 1.9 }}>
-              연결 코드가 10분 동안 유효합니다.<br />
-              외부 트래커 앱은 이 코드를 `/api/devices/connect`로 전송하면 됩니다.
+          <div onClick={e => e.stopPropagation()} style={{ background: C.raised, borderRadius: 20, padding: '34px', border: `1px solid ${C.border2}`, textAlign: 'left', maxWidth: 430, width: 'calc(100% - 32px)' }}>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.white, marginBottom: 8 }}>{pairingGuide.title}</div>
+            <div style={{ fontSize: 12, color: C.alt, marginBottom: 22, lineHeight: 1.8 }}>
+              {pairingGuide.description}<br />
+              연결 코드는 10분 동안 유효합니다.
             </div>
             <div style={{ background: C.surface, borderRadius: 12, padding: '14px 16px', marginBottom: 20, border: `1px solid ${C.border2}` }}>
               <div style={{ fontFamily: "'JetBrains Mono', monospace", color: C.mint, fontSize: 18, fontWeight: 800, wordBreak: 'break-all' }}>{pairing?.token || '생성 중'}</div>
               <div style={{ fontSize: 10, color: C.alt, marginTop: 8 }}>{pairing ? new Date(pairing.expires_at).toLocaleTimeString('ko-KR') : ''} 만료</div>
             </div>
+            {pairingGuide.command && (
+              <div style={{ background: '#0b0b0b', border: `1px solid ${C.border}`, borderRadius: 10, padding: 12, marginBottom: 18 }}>
+                <div style={{ fontSize: 10, color: C.alt, marginBottom: 8 }}>노트북에서 실행</div>
+                <div style={{ fontFamily: "'JetBrains Mono', monospace", color: C.muted, fontSize: 11, lineHeight: 1.6, wordBreak: 'break-all' }}>{pairingGuide.command}</div>
+              </div>
+            )}
             <div style={{ fontSize: 10, color: C.alt, fontFamily: "'JetBrains Mono', monospace", marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
               <PulsingDot />&nbsp;기기 연결 대기 중...
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => setQr(false)} style={{ flex: 1, padding: '9px 14px', borderRadius: 8, border: `1px solid ${C.border2}`, background: 'transparent', color: C.alt, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, cursor: 'pointer' }}>취소</button>
-              <button onClick={completePairing} style={{ flex: 1, padding: '9px 14px', borderRadius: 8, border: 'none', background: C.mint, color: C.ink, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>이 기기로 연결</button>
+              <button onClick={copyPairingToken} style={{ flex: 1, padding: '9px 14px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.surface, color: C.muted, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>{copied ? '복사됨' : '코드 복사'}</button>
+              <button onClick={completePairing} style={{ flex: 1, padding: '9px 14px', borderRadius: 8, border: 'none', background: C.mint, color: C.ink, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>현재 기기로 테스트</button>
             </div>
           </div>
         </div>
