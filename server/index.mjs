@@ -199,7 +199,10 @@ async function exchangeCode(provider, code) {
   const config = oauthConfig(provider)
   const body = new URLSearchParams({ client_id: config.clientId, client_secret: config.clientSecret, code, redirect_uri: callbackUrl(provider) })
   const response = await fetch(config.tokenUrl, { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' }, body })
-  if (!response.ok) throw new Error(`OAuth 토큰 요청 실패: ${response.status}`)
+  if (!response.ok) {
+    const detail = await response.text().catch(() => '')
+    throw new Error(`OAuth 토큰 요청 실패: ${response.status}${detail ? ` ${detail}` : ''}`)
+  }
   const token = await response.json()
   if (!token.access_token) throw new Error('OAuth 토큰을 받지 못했습니다')
   return token.access_token
@@ -285,13 +288,20 @@ const server = http.createServer(async (req, res) => {
       const code = url.searchParams.get('code')
       const state = url.searchParams.get('state')
       if (!code || !state || parseCookies(req).oauth_state !== state) return redirect(res, `${WEB_ORIGIN}/?auth=failed`)
-      const accessToken = await exchangeCode(provider, code)
-      const user = upsertOAuthUser(await fetchOAuthProfile(provider, accessToken))
-      const session = createSession(user.id)
-      return redirect(res, `${WEB_ORIGIN}/`, [
-        sessionCookie(session.token, session.expires),
-        'oauth_state=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0',
-      ])
+      try {
+        const accessToken = await exchangeCode(provider, code)
+        const user = upsertOAuthUser(await fetchOAuthProfile(provider, accessToken))
+        const session = createSession(user.id)
+        return redirect(res, `${WEB_ORIGIN}/`, [
+          sessionCookie(session.token, session.expires),
+          'oauth_state=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0',
+        ])
+      } catch (error) {
+        console.error(`${provider} OAuth callback failed:`, error)
+        return redirect(res, `${WEB_ORIGIN}/?auth=failed&provider=${provider}`, [
+          'oauth_state=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0',
+        ])
+      }
     }
 
     if (url.pathname === '/api/challenge') {

@@ -112,6 +112,7 @@ function ErrorBlock({ message }: { message: string }) {
 }
 
 function LoginPage() {
+  const authFailed = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('auth') === 'failed'
   const login = (provider: 'github' | 'google') => {
     window.location.href = `/api/auth/${provider}`
   }
@@ -125,6 +126,11 @@ function LoginPage() {
             <div style={{ fontSize: 26, fontWeight: 900, color: C.white, letterSpacing: '-0.02em', lineHeight: 1 }}>하루핏</div>
           </div>
         </div>
+        {authFailed && (
+          <div style={{ marginBottom: 14, padding: '10px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: '#141414', color: C.mintMuted, fontSize: 12, lineHeight: 1.5 }}>
+            로그인에 실패했습니다. OAuth callback URL과 client secret을 확인하세요.
+          </div>
+        )}
         <button onClick={() => login('github')} style={{ width: '100%', padding: '13px 16px', borderRadius: 10, border: '1px solid #30363d', background: '#24292f', color: C.white, cursor: 'pointer', fontSize: 13, fontWeight: 800, marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
           <IcoGitHubBrand />
           <span>GitHub로 계속하기</span>
