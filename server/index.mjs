@@ -205,7 +205,7 @@ function callbackUrl(provider) {
 }
 async function exchangeCode(provider, code) {
   const config = oauthConfig(provider)
-  const body = new URLSearchParams({ client_id: config.clientId, client_secret: config.clientSecret, code, redirect_uri: callbackUrl(provider) })
+  const body = new URLSearchParams({ client_id: config.clientId, client_secret: config.clientSecret, code, redirect_uri: callbackUrl(provider), grant_type: 'authorization_code' })
   const response = await fetch(config.tokenUrl, { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' }, body })
   if (!response.ok) {
     const detail = await response.text().catch(() => '')
