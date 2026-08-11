@@ -30,6 +30,48 @@ const NAV: { id: Page; label: string; Icon: (p: { active: boolean }) => React.Re
   { id: 'devices',   label: '기기',   Icon: ({ active }) => <IcoDevice c={active ? C.mint : '#4a4a4a'} /> },
 ]
 
+const PAGE_PATH: Record<Page, string> = {
+  dashboard: '/main',
+  timeline: '/timeline',
+  analytics: '/analytics',
+  focus: '/study',
+  devices: '/devices',
+  result: '/result',
+}
+
+const PATH_PAGE: Record<string, Page> = {
+  '/': 'dashboard',
+  '/main': 'dashboard',
+  '/dashboard': 'dashboard',
+  '/timeline': 'timeline',
+  '/analytics': 'analytics',
+  '/study': 'focus',
+  '/focus': 'focus',
+  '/devices': 'devices',
+  '/result': 'result',
+}
+
+function appPathname() {
+  const base = import.meta.env.BASE_URL || '/'
+  const pathname = window.location.pathname
+  const withoutBase = base !== '/' && pathname.startsWith(base)
+    ? pathname.slice(base.length - 1)
+    : pathname
+  const normalized = withoutBase.replace(/\/+$/, '') || '/'
+  return PATH_PAGE[normalized] ? normalized : '/'
+}
+
+function pageFromLocation(): Page {
+  return PATH_PAGE[appPathname()] || 'dashboard'
+}
+
+function urlForPage(page: Page) {
+  const base = import.meta.env.BASE_URL || '/'
+  const path = PAGE_PATH[page]
+  if (base === '/') return path
+  return `${base.replace(/\/$/, '')}${path}`
+}
+
 function fmtMinutes(min: number) {
   const h = Math.floor(min / 60)
   const m = min % 60
@@ -97,7 +139,7 @@ function LoginPage() {
 }
 
 export default function App() {
-  const [page, setPage] = useState<Page>('dashboard')
+  const [page, setPage] = useState<Page>(() => pageFromLocation())
   const [menuOpen, setMenuOpen] = useState(false)
   const [challenge, setChallenge] = useState<ChallengeData | null>(null)
   const [user, setUser] = useState<AuthUser | null>(null)
@@ -111,6 +153,12 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+    const onPopState = () => setPage(pageFromLocation())
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
+
+  useEffect(() => {
     if (!user) return
     api.challenge().then(setChallenge).catch(() => setChallenge(null))
   }, [user])
@@ -119,7 +167,16 @@ export default function App() {
     await api.logout().catch(() => {})
     setUser(null)
     setChallenge(null)
-    setPage('dashboard')
+    navigatePage('dashboard', true)
+  }
+
+  const navigatePage = (nextPage: Page, replace = false) => {
+    setPage(nextPage)
+    const nextUrl = urlForPage(nextPage)
+    if (window.location.pathname !== nextUrl) {
+      const method = replace ? 'replaceState' : 'pushState'
+      window.history[method]({}, '', nextUrl)
+    }
   }
 
   if (authLoading) return <LoadingBlock label="로그인 상태를 확인하는 중입니다" />
@@ -128,10 +185,10 @@ export default function App() {
   const currentDay = challenge?.currentDay ?? 1
   return (
     <div style={{ display: 'flex', height: '100vh', background: C.canvas, overflow: 'hidden', fontFamily: "'Pretendard', system-ui, sans-serif" }}>
-      <Sidebar page={page} setPage={setPage} open={menuOpen} setOpen={setMenuOpen} currentDay={currentDay} user={user} onLogout={logout} />
+      <Sidebar page={page} setPage={navigatePage} open={menuOpen} setOpen={setMenuOpen} currentDay={currentDay} user={user} onLogout={logout} />
       <main style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }} className="scrollbar-none">
         <MobileTopbar page={page} onMenu={() => setMenuOpen(true)} />
-        {page === 'dashboard' && <DashboardPage setPage={setPage} currentDay={currentDay} />}
+        {page === 'dashboard' && <DashboardPage setPage={navigatePage} currentDay={currentDay} />}
         {page === 'timeline'  && <TimelinePage currentDay={currentDay} />}
         {page === 'analytics' && <AnalyticsPage />}
         {page === 'focus'     && <FocusPage currentDay={currentDay} />}
