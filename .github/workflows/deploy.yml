@@ -28,8 +28,10 @@ jobs:
         uses: appleboy/ssh-action@v1.0.3
         env:
           HARUFIT_HOST_PORT: ${{ vars.HARUFIT_HOST_PORT || '4010' }}
-          HARUFIT_WEB_ORIGIN: ${{ vars.HARUFIT_WEB_ORIGIN || 'https://harufit.https.gsmsv.site' }}
-          HARUFIT_API_ORIGIN: ${{ vars.HARUFIT_API_ORIGIN || 'https://harufit.https.gsmsv.site' }}
+          HARUFIT_WEB_ORIGIN: ${{ vars.HARUFIT_WEB_ORIGIN || 'https://playground.https.gsmsv.site' }}
+          HARUFIT_WEB_BASE_URL: ${{ vars.HARUFIT_WEB_BASE_URL || 'https://playground.https.gsmsv.site/apps/harufit/' }}
+          HARUFIT_API_ORIGIN: ${{ vars.HARUFIT_API_ORIGIN || 'https://playground.https.gsmsv.site' }}
+          HARUFIT_PUBLIC_API_BASE: ${{ vars.HARUFIT_PUBLIC_API_BASE || 'https://playground.https.gsmsv.site/harufit-api' }}
           HARUFIT_GOOGLE_CLIENT_ID: ${{ secrets.HARUFIT_GOOGLE_CLIENT_ID }}
           HARUFIT_GOOGLE_CLIENT_SECRET: ${{ secrets.HARUFIT_GOOGLE_CLIENT_SECRET }}
           HARUFIT_GITHUB_CLIENT_ID: ${{ secrets.HARUFIT_GITHUB_CLIENT_ID }}
@@ -39,7 +41,7 @@ jobs:
           port: 24136
           username: ubuntu
           password: ${{ secrets.SSH_PASSWORD }}
-          envs: HARUFIT_HOST_PORT,HARUFIT_WEB_ORIGIN,HARUFIT_API_ORIGIN,HARUFIT_GOOGLE_CLIENT_ID,HARUFIT_GOOGLE_CLIENT_SECRET,HARUFIT_GITHUB_CLIENT_ID,HARUFIT_GITHUB_CLIENT_SECRET
+          envs: HARUFIT_HOST_PORT,HARUFIT_WEB_ORIGIN,HARUFIT_WEB_BASE_URL,HARUFIT_API_ORIGIN,HARUFIT_PUBLIC_API_BASE,HARUFIT_GOOGLE_CLIENT_ID,HARUFIT_GOOGLE_CLIENT_SECRET,HARUFIT_GITHUB_CLIENT_ID,HARUFIT_GITHUB_CLIENT_SECRET
           script: |
             set -e
 
@@ -65,7 +67,9 @@ jobs:
             API_PORT=$HARUFIT_HOST_PORT
             HOST_PORT=$HARUFIT_HOST_PORT
             WEB_ORIGIN=$HARUFIT_WEB_ORIGIN
+            WEB_BASE_URL=$HARUFIT_WEB_BASE_URL
             API_ORIGIN=$HARUFIT_API_ORIGIN
+            PUBLIC_API_BASE=$HARUFIT_PUBLIC_API_BASE
             GOOGLE_CLIENT_ID=$HARUFIT_GOOGLE_CLIENT_ID
             GOOGLE_CLIENT_SECRET=$HARUFIT_GOOGLE_CLIENT_SECRET
             GITHUB_CLIENT_ID=$HARUFIT_GITHUB_CLIENT_ID
@@ -81,7 +85,7 @@ jobs:
             grep -q '^GITHUB_CLIENT_SECRET=' .env || { echo "GITHUB_CLIENT_SECRET is missing"; exit 1; }
 
             npm ci --no-audit --fund=false
-            npm run build
+            VITE_BASE_PATH=/apps/harufit/ VITE_API_BASE_URL=/harufit-api npm run build
 
             if command -v pm2 >/dev/null 2>&1; then
               pm2 delete harufit 2>/dev/null || true
