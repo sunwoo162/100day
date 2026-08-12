@@ -485,10 +485,14 @@ function DashboardPage({ setPage, currentDay, onConnectDevice }: { setPage: (p: 
   ]
 
   const appTotals = new Map<string, { name: string; minutes: number }>()
-  data.apps.forEach((app) => appTotals.set(app.name, { name: app.name, minutes: app.minutes }))
-  const liveAppName = browserUsageName()
-  const currentApp = appTotals.get(liveAppName)
-  appTotals.set(liveAppName, { name: liveAppName, minutes: (currentApp?.minutes ?? 0) + liveMinutes })
+  data.apps
+    .filter((app) => !(desktopShell && app.source === 'browser'))
+    .forEach((app) => appTotals.set(app.name, { name: app.name, minutes: app.minutes }))
+  if (!desktopShell) {
+    const liveAppName = browserUsageName()
+    const currentApp = appTotals.get(liveAppName)
+    appTotals.set(liveAppName, { name: liveAppName, minutes: (currentApp?.minutes ?? 0) + liveMinutes })
+  }
   const appRows = [...appTotals.values()].filter((app) => app.minutes > 0).sort((a, b) => b.minutes - a.minutes).slice(0, 8)
   const maxAppMinutes = Math.max(1 / 60, ...appRows.map((app) => app.minutes))
   const apps = appRows.map((app, i) => ({
