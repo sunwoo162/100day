@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, Tray, shell, session } = require('electron')
+const { app, BrowserWindow, Menu, Tray, shell, session, nativeTheme } = require('electron')
 const { spawn } = require('node:child_process')
 const fs = require('node:fs')
 const path = require('node:path')
@@ -17,6 +17,8 @@ let logDir = ''
 let mainWindow = null
 let tray = null
 let isQuitting = false
+
+nativeTheme.themeSource = 'dark'
 
 function withDesktopFlag(url) {
   const parsed = new URL(url)
