@@ -8,11 +8,28 @@ const rootDir = app.isPackaged ? path.join(process.resourcesPath, 'app') : appRo
 const iconPath = path.join(rootDir, 'assets', 'icon.ico')
 const isWindows = process.platform === 'win32'
 const devServerUrl = process.env.HARUFIT_DESKTOP_DEV_SERVER_URL || ''
-const appUrl = devServerUrl || 'http://localhost:4000'
+const baseAppUrl = devServerUrl || 'http://localhost:4000'
 const apiBaseUrl = 'http://localhost:4000/api'
 const children = new Set()
 let desktopTrackerProcess = null
 let authTrackerTimer = null
+let logDir = ''
+
+function withDesktopFlag(url) {
+  const parsed = new URL(url)
+  parsed.searchParams.set('desktop', '1')
+  return parsed.toString()
+}
+
+function logDesktop(message) {
+  try {
+    if (!logDir) logDir = path.join(app.getPath('userData'), 'logs')
+    fs.mkdirSync(logDir, { recursive: true })
+    fs.appendFileSync(path.join(logDir, 'desktop.log'), `[${new Date().toISOString()}] ${message}\n`, 'utf8')
+  } catch {
+    // Logging must not interrupt the desktop app.
+  }
+}
 
 function loadEnvFile(filePath) {
   if (!fs.existsSync(filePath)) return
@@ -67,8 +84,11 @@ async function sessionCookieHeader() {
 
 async function sendDesktopUsage(appName, minutes) {
   const cookie = await sessionCookieHeader()
-  if (!cookie) return
-  await fetch(`${apiBaseUrl}/track/desktop`, {
+  if (!cookie) {
+    logDesktop('skip desktop usage: no session cookie')
+    return
+  }
+  const response = await fetch(`${apiBaseUrl}/track/desktop`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -79,14 +99,22 @@ async function sendDesktopUsage(appName, minutes) {
       minutes,
       occurred_at: new Date().toISOString(),
     }),
-  }).catch(() => {})
+  }).catch(error => {
+    logDesktop(`desktop usage request failed: ${error?.message || error}`)
+    return null
+  })
+  if (response && !response.ok) {
+    const text = await response.text().catch(() => '')
+    logDesktop(`desktop usage rejected: ${response.status} ${text}`)
+  }
 }
 
 function startDesktopTracker() {
   if (!isWindows || desktopTrackerProcess) return
-  const intervalSeconds = 30
+  const intervalSeconds = 5
   const idleLimitSeconds = 180
   const scriptPath = path.join(rootDir, 'scripts', 'windows-active-app-watch.ps1')
+  logDesktop(`start desktop tracker: ${scriptPath}`)
   desktopTrackerProcess = spawnChild('powershell.exe', [
     '-NoProfile',
     '-ExecutionPolicy',
@@ -117,6 +145,7 @@ function startDesktopTracker() {
   })
 
   desktopTrackerProcess.on('exit', () => {
+    logDesktop('desktop tracker exited')
     desktopTrackerProcess = null
   })
 }
@@ -135,7 +164,7 @@ function startDesktopTrackerAfterLogin() {
     else stopDesktopTracker()
   }
   check()
-  authTrackerTimer = setInterval(check, 10000)
+  authTrackerTimer = setInterval(check, 2000)
 }
 
 async function loadWhenReady(win, url, attempts = 30) {
@@ -171,7 +200,11 @@ function createWindow() {
     return { action: 'deny' }
   })
 
-  loadWhenReady(win, appUrl)
+  win.webContents.on('did-navigate', () => {
+    startDesktopTrackerAfterLogin()
+  })
+
+  loadWhenReady(win, withDesktopFlag(baseAppUrl))
 }
 
 app.whenReady().then(() => {
