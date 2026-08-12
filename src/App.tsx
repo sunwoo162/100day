@@ -203,7 +203,7 @@ function PublicDownloadPage() {
               <IcoDevice c={C.mint} />
               <span style={{ fontSize: 10, color: C.mint, fontFamily: "'JetBrains Mono', monospace", fontWeight: 900, letterSpacing: '0.1em' }}>WINDOWS FIRST</span>
             </div>
-            <h1 style={{ margin: 0, fontSize: 'clamp(46px, 8vw, 92px)', lineHeight: 0.92, letterSpacing: '-0.055em', fontWeight: 950, color: C.white }}>
+            <h1 style={{ margin: 0, fontSize: 'clamp(40px, 6.4vw, 74px)', lineHeight: 1.08, letterSpacing: 0, fontWeight: 950, color: C.white }}>
               오늘 쓴 앱이<br />그대로 기록됩니다
             </h1>
             <p style={{ margin: '22px 0 0', maxWidth: 560, fontSize: 15, lineHeight: 1.9, color: C.muted }}>
