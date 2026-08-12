@@ -1218,6 +1218,7 @@ function DevicesPage({ autoPairComputer, onAutoPairHandled }: { autoPairComputer
   const [copied, setCopied] = useState(false)
   const [connectToken, setConnectToken] = useState('')
   const [lockedDevice, setLockedDevice] = useState<{ title: string; description: string } | null>(null)
+  const desktopShell = isDesktopShell()
 
   const refresh = () => api.devices().then(setDevices).catch((err) => setError(err.message))
 
@@ -1329,7 +1330,7 @@ function DevicesPage({ autoPairComputer, onAutoPairHandled }: { autoPairComputer
       <div style={{ fontSize: 32, fontWeight: 900, color: C.white, letterSpacing: '-0.02em', marginBottom: 28 }}>연결된 기기</div>
       {error && <div style={{ color: C.mintMuted, fontSize: 12, marginBottom: 16 }}>{error}</div>}
 
-      <div style={{ background: 'linear-gradient(135deg, rgba(0,232,197,0.12), rgba(26,26,26,1) 42%, rgba(13,13,13,1))', borderRadius: 16, padding: '26px', border: `1px solid rgba(0,232,197,0.18)`, marginBottom: 18, display: 'grid', gridTemplateColumns: '1fr auto', gap: 24, alignItems: 'center' }}>
+      {!desktopShell && <div style={{ background: 'linear-gradient(135deg, rgba(0,232,197,0.12), rgba(26,26,26,1) 42%, rgba(13,13,13,1))', borderRadius: 16, padding: '26px', border: `1px solid rgba(0,232,197,0.18)`, marginBottom: 18, display: 'grid', gridTemplateColumns: '1fr auto', gap: 24, alignItems: 'center' }}>
         <div>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '5px 8px', borderRadius: 7, background: 'rgba(0,232,197,0.1)', border: `1px solid rgba(0,232,197,0.16)`, marginBottom: 12 }}>
             <IcoDevice c={C.mint} />
@@ -1352,7 +1353,7 @@ function DevicesPage({ autoPairComputer, onAutoPairHandled }: { autoPairComputer
           <a href={windowsInstallerUrl()} style={{ textDecoration: 'none', textAlign: 'center', padding: '13px 20px', borderRadius: 999, background: C.mint, color: C.ink, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 13, fontWeight: 900, boxShadow: '0 16px 34px rgba(0,232,197,0.14)' }}>Windows 다운로드</a>
           <button onClick={() => startPairing({ kind: 'computer', name: '노트북 트래커', platform: 'Windows' })} style={{ padding: '10px 18px', borderRadius: 999, border: `1px solid ${C.border2}`, background: 'rgba(0,0,0,0.18)', color: C.muted, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 11, fontWeight: 800, cursor: 'pointer' }}>명령어로 연결</button>
         </div>
-      </div>
+      </div>}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14, marginBottom: 32 }}>
         {connected.map((d) => (
