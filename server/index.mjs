@@ -12,7 +12,7 @@ const distDir = path.join(rootDir, 'dist')
 const PORT = Number(process.env.API_PORT || 4000)
 const WEB_ORIGIN = process.env.WEB_ORIGIN || 'http://localhost:5173'
 const API_ORIGIN = process.env.API_ORIGIN || `http://localhost:${PORT}`
-const WINDOWS_INSTALLER_PATH = process.env.HARUFIT_WINDOWS_INSTALLER_PATH || path.join(rootDir, 'desktop-release', '하루핏 Setup 0.1.0.exe')
+const WINDOWS_INSTALLER_PATH = process.env.HARUFIT_WINDOWS_INSTALLER_PATH || path.join(rootDir, 'desktop-release', '하루핏 Setup 0.1.1.exe')
 const SESSION_COOKIE = 'sid'
 const SESSION_DAYS = 30
 
@@ -324,7 +324,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (url.pathname === '/downloads/harufit-windows' && req.method === 'GET') {
-      return downloadFile(res, WINDOWS_INSTALLER_PATH, '하루핏 Setup 0.1.0.exe')
+      return downloadFile(res, WINDOWS_INSTALLER_PATH, '하루핏 Setup 0.1.1.exe')
     }
 
     if (url.pathname === '/api/auth/me') return json(res, 200, { user: publicUser(currentUser(req)) })

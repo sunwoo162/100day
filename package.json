@@ -1,7 +1,7 @@
 {
-  "name": "nayibaegil",
+  "name": "harufit",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "하루핏 데스크톱 앱",
   "type": "module",
   "main": "electron/main.cjs",
@@ -37,6 +37,7 @@
   "build": {
     "appId": "site.harufit.desktop",
     "productName": "하루핏",
+    "executableName": "하루핏",
     "directories": {
       "output": "desktop-release"
     },
@@ -70,6 +71,7 @@
       "uninstallerIcon": "assets/icon.ico",
       "installerHeaderIcon": "assets/icon.ico",
       "oneClick": false,
+      "runAfterFinish": true,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
