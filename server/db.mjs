@@ -83,6 +83,7 @@ CREATE TABLE IF NOT EXISTS app_usage (
   source TEXT NOT NULL,
   app_name TEXT NOT NULL,
   minutes INTEGER NOT NULL DEFAULT 0,
+  occurred_at TEXT,
   FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS app_classifications (
@@ -160,6 +161,11 @@ for (const [table, definition] of [
 ]) {
   const columns = db.prepare(`PRAGMA table_info(${table})`).all().map(column => column.name)
   if (!columns.includes('user_id')) db.exec(`ALTER TABLE ${table} ADD COLUMN ${definition}`)
+}
+
+{
+  const columns = db.prepare('PRAGMA table_info(app_usage)').all().map(column => column.name)
+  if (!columns.includes('occurred_at')) db.exec('ALTER TABLE app_usage ADD COLUMN occurred_at TEXT')
 }
 
 const studyCategorySql = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'study_categories'").get()?.sql || ''

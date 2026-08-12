@@ -505,7 +505,6 @@ function DashboardPage({ user, setPage, currentDay, onConnectDevice }: { user: A
   }
   const liveMinutes = document.hidden ? 0 : Math.max(0, (now - liveStartRef.current) / 60000)
   const pcDisplayMinutes = (m.pc.minutes ?? 0) + liveMinutes
-  const developmentDisplayMinutes = (m.development.minutes ?? 0) + liveMinutes
   const recent = data.recent ?? []
   const hasRecent = recent.length > 0
   const spark = {
@@ -517,7 +516,7 @@ function DashboardPage({ user, setPage, currentDay, onConnectDevice }: { user: A
   const stats = [
     { id: 'pc', label: 'PC', value: fmtMinutes(pcDisplayMinutes), sub: fmtDelta(m.pc.delta), up: m.pc.delta >= 0, spark: spark.pc, max: 10, color: C.mint },
     { id: 'focus', label: '공부', value: parseHourValue(m.focus.display || '0h 00m'), sub: fmtDelta(m.focus.delta), up: m.focus.delta >= 0, spark: spark.focus, max: 5, color: C.mint, action: '앱 등록하기' },
-    { id: 'dev', label: '개발', value: fmtMinutes(developmentDisplayMinutes), sub: fmtDelta(m.development.delta), up: m.development.delta >= 0, spark: spark.development, max: 5, color: C.mintBright, action: '앱 등록하기' },
+    { id: 'dev', label: '개발', value: parseHourValue(m.development.display || '0h 00m'), sub: fmtDelta(m.development.delta), up: m.development.delta >= 0, spark: spark.development, max: 5, color: C.mintBright, action: '앱 등록하기' },
     { id: 'git', label: 'GitHub', value: `커밋 ${m.github.commits || 0}개`, sub: fmtDelta(m.github.delta, ''), up: m.github.delta >= 0, spark: spark.github, max: 12, color: C.mint, action: user.providers?.includes('github') ? '' : '연결하기' },
   ]
 

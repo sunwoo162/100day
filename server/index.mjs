@@ -154,11 +154,13 @@ function formatMinutes(min) {
   const seconds = totalSeconds % 60
   return `${hours}h ${String(minutes).padStart(2,'0')}m ${String(seconds).padStart(2,'0')}s`
 }
-function isDevelopmentApp(appName) {
-  return /code|visual studio|vscode|cursor|webstorm|intellij|pycharm|terminal|powershell|cmd|git|github|node|npm|pnpm|vite|localhost|devtools|하루핏/i.test(appName)
-}
 function normalizeDesktopAppName(appName) {
   return String(appName || 'Unknown').split(' - ')[0].trim().slice(0, 80) || 'Unknown'
+}
+function trackingTimestamp(occurredAt) {
+  const date = Number.isNaN(occurredAt.getTime()) ? new Date() : occurredAt
+  date.setMilliseconds(0)
+  return date.toISOString()
 }
 function appClassifications(userId) {
   return db.prepare('SELECT app_name AS name, category FROM app_classifications WHERE user_id = ? ORDER BY app_name').all(userId)
@@ -167,18 +169,23 @@ function appCategory(userId, appName) {
   return db.prepare('SELECT category FROM app_classifications WHERE user_id = ? AND app_name = ? ORDER BY category LIMIT 1').get(userId, appName)?.category || ''
 }
 function recordPcUsage(userId, source, appName, minutes, occurredAt = new Date()) {
-  const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(occurredAt)
+  const trackedAt = Number.isNaN(occurredAt.getTime()) ? new Date() : occurredAt
+  const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(trackedAt)
   const challenge = getUserChallenge(userId)
   const day = dayForDate(challenge, date)
   ensureMetric(userId, challenge, day)
   const normalizedAppName = source === 'desktop' ? normalizeDesktopAppName(appName) : appName
+  const occurredAtIso = trackingTimestamp(new Date(trackedAt))
+  const duplicate = db.prepare('SELECT id FROM app_usage WHERE user_id = ? AND day_number = ? AND app_name = ? AND occurred_at = ? LIMIT 1')
+    .get(userId, day, normalizedAppName, occurredAtIso)
+  if (duplicate) return { day_number: day, minutes: 0, duplicate: true }
   const category = appCategory(userId, normalizedAppName)
   const focusMinutes = category === 'focus' ? minutes : 0
-  const devMinutes = category === 'development' || (!category && isDevelopmentApp(normalizedAppName)) ? minutes : 0
+  const devMinutes = category === 'development' ? minutes : 0
   db.prepare('UPDATE daily_metrics SET pc_minutes = pc_minutes + ?, focus_minutes = focus_minutes + ?, development_minutes = development_minutes + ? WHERE user_id = ? AND challenge_id = ? AND day_number = ?')
     .run(minutes, focusMinutes, devMinutes, userId, challenge.id, day)
-  db.prepare('INSERT INTO app_usage (user_id, day_number, source, app_name, minutes) VALUES (?, ?, ?, ?, ?)')
-    .run(userId, day, source, normalizedAppName, minutes)
+  db.prepare('INSERT INTO app_usage (user_id, day_number, source, app_name, minutes, occurred_at) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(userId, day, source, normalizedAppName, minutes, occurredAtIso)
   return { day_number: day, minutes }
 }
 function parseCookies(req) {
