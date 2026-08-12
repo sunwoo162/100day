@@ -56,6 +56,6 @@ if ($handle -ne [IntPtr]::Zero) {
 @{
   processName = $processName
   windowTitle = $windowTitle
-  appName = if ($windowTitle) { "$processName - $windowTitle" } else { $processName }
+  appName = $processName
   idleSeconds = $idleSeconds
 } | ConvertTo-Json -Compress

@@ -62,7 +62,7 @@ function Get-ActiveAppSnapshot {
   @{
     processName = $processName
     windowTitle = $windowTitle
-    appName = if ($windowTitle) { "$processName - $windowTitle" } else { $processName }
+    appName = $processName
     idleSeconds = $idleSeconds
     intervalSeconds = $IntervalSeconds
     active = $idleSeconds -lt $IdleLimitSeconds

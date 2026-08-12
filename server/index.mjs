@@ -148,16 +148,20 @@ function formatMinutes(min) {
 function isDevelopmentApp(appName) {
   return /code|visual studio|vscode|cursor|webstorm|intellij|pycharm|terminal|powershell|cmd|git|github|node|npm|pnpm|vite|localhost|devtools|하루핏/i.test(appName)
 }
+function normalizeDesktopAppName(appName) {
+  return String(appName || 'Unknown').split(' - ')[0].trim().slice(0, 80) || 'Unknown'
+}
 function recordPcUsage(userId, source, appName, minutes, occurredAt = new Date()) {
   const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(occurredAt)
   const challenge = getUserChallenge(userId)
   const day = dayForDate(challenge, date)
   ensureMetric(userId, challenge, day)
-  const devMinutes = isDevelopmentApp(appName) ? minutes : 0
+  const normalizedAppName = source === 'desktop' ? normalizeDesktopAppName(appName) : appName
+  const devMinutes = isDevelopmentApp(normalizedAppName) ? minutes : 0
   db.prepare('UPDATE daily_metrics SET pc_minutes = pc_minutes + ?, development_minutes = development_minutes + ? WHERE user_id = ? AND challenge_id = ? AND day_number = ?')
     .run(minutes, devMinutes, userId, challenge.id, day)
   db.prepare('INSERT INTO app_usage (user_id, day_number, source, app_name, minutes) VALUES (?, ?, ?, ?, ?)')
-    .run(userId, day, source, appName, minutes)
+    .run(userId, day, source, normalizedAppName, minutes)
   return { day_number: day, minutes }
 }
 function parseCookies(req) {

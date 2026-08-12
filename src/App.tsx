@@ -100,7 +100,11 @@ function browserUsageName() {
 }
 
 function isDesktopShell() {
-  return /\bElectron\//.test(navigator.userAgent) || window.location.search.includes('desktop=1')
+  const hasDesktopFlag = window.location.search.includes('desktop=1')
+  if (hasDesktopFlag) {
+    window.localStorage.setItem('harufit.desktopShell', '1')
+  }
+  return /\bElectron\//.test(navigator.userAgent) || hasDesktopFlag || window.localStorage.getItem('harufit.desktopShell') === '1'
 }
 
 function apiBaseUrl() {
