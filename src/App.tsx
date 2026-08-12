@@ -251,6 +251,7 @@ export default function App() {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [authLoading, setAuthLoading] = useState(true)
   const [autoPairComputer, setAutoPairComputer] = useState(false)
+  const [resultLockedOpen, setResultLockedOpen] = useState(false)
 
   useEffect(() => {
     api.me()
@@ -314,13 +315,29 @@ export default function App() {
     }
   }
 
+  useEffect(() => {
+    if (!challenge || page !== 'result' || challenge.currentDay >= 100) return
+    setResultLockedOpen(true)
+    navigatePage('dashboard', true)
+  }, [challenge, page])
+
   if (authLoading) return <LoadingBlock label="로그인 상태를 확인하는 중입니다" />
   if (!user) return isDesktopShell() ? <LoginPage /> : <PublicDownloadPage />
 
   const currentDay = challenge?.currentDay ?? 1
+  const remainingResultDays = Math.max(0, 100 - currentDay)
+  const openResult = () => {
+    if (currentDay < 100) {
+      setResultLockedOpen(true)
+      setMenuOpen(false)
+      return
+    }
+    navigatePage('result')
+    setMenuOpen(false)
+  }
   return (
     <div style={{ display: 'flex', height: '100vh', background: C.canvas, overflow: 'hidden', fontFamily: "'Pretendard', system-ui, sans-serif" }}>
-      <Sidebar page={page} setPage={navigatePage} open={menuOpen} setOpen={setMenuOpen} currentDay={currentDay} user={user} onLogout={logout} />
+      <Sidebar page={page} setPage={navigatePage} open={menuOpen} setOpen={setMenuOpen} currentDay={currentDay} user={user} onLogout={logout} onResultClick={openResult} />
       <main style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }} className="scrollbar-none">
         <MobileTopbar page={page} onMenu={() => setMenuOpen(true)} />
         {page === 'dashboard' && <DashboardPage user={user} setPage={navigatePage} currentDay={currentDay} onConnectDevice={() => { setAutoPairComputer(true); navigatePage('devices') }} />}
@@ -331,6 +348,15 @@ export default function App() {
         {page === 'result'    && <ResultPage />}
       </main>
       {menuOpen && <div onClick={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', zIndex: 39 }} />}
+      {resultLockedOpen && (
+        <div onClick={() => setResultLockedOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.76)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 90, padding: 24 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: 'min(420px, 100%)', background: C.raised, border: `1px solid ${C.border2}`, borderRadius: 18, padding: 30, textAlign: 'center', boxShadow: '0 28px 90px rgba(0,0,0,0.44)' }}>
+            <div style={{ color: C.white, fontSize: 24, fontWeight: 900, marginBottom: 10 }}>{remainingResultDays}일 남았어요</div>
+            <div style={{ color: C.alt, fontSize: 13, lineHeight: 1.8, marginBottom: 22 }}>100일을 향해서 화이팅</div>
+            <button onClick={() => setResultLockedOpen(false)} style={{ width: '100%', border: 'none', borderRadius: 12, background: C.mint, color: C.ink, padding: '12px 14px', fontSize: 13, fontWeight: 900, cursor: 'pointer' }}>확인</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -338,7 +364,7 @@ export default function App() {
 /* ═══════════════════════════════════════════════
    SIDEBAR
 ═══════════════════════════════════════════════ */
-function Sidebar({ page, setPage, open, setOpen, currentDay, user, onLogout }: { page: Page; setPage: (p: Page) => void; open: boolean; setOpen: (v: boolean) => void; currentDay: number; user: AuthUser; onLogout: () => void }) {
+function Sidebar({ page, setPage, open, setOpen, currentDay, user, onLogout, onResultClick }: { page: Page; setPage: (p: Page) => void; open: boolean; setOpen: (v: boolean) => void; currentDay: number; user: AuthUser; onLogout: () => void; onResultClick: () => void }) {
   return (
     <aside data-open={open} style={{
       width: 210, minWidth: 210, background: C.surface,
@@ -384,7 +410,7 @@ function Sidebar({ page, setPage, open, setOpen, currentDay, user, onLogout }: {
             로그아웃
           </button>
         </div>
-        <NavBtn active={page === 'result'} onClick={() => { setPage('result'); setOpen(false) }}>
+        <NavBtn active={page === 'result'} onClick={onResultClick}>
           <IcoTrophy c={page === 'result' ? C.mint : '#4a4a4a'} />
           <span>백일 결과</span>
         </NavBtn>
@@ -1526,16 +1552,9 @@ function ResultPage() {
     ...activityTotals.map((item) => ({ label: item.label, val: fmtMinutes(item.minutes), pct: Math.round((item.minutes / maxActivityMinutes) * 100), color: item.color })),
     { label: 'GitHub', val: `${data.totals.github_commits.toLocaleString()}커밋`, pct: 0, color: C.mint },
   ]
-  const pct = (first: number, last: number, invert = false) => {
-    const delta = first ? Math.round(((last - first) / first) * 100) : 0
-    const good = invert ? delta <= 0 : delta >= 0
-    return { delta: `${delta >= 0 ? '↑' : '↓'} ${Math.abs(delta)}%`, good }
-  }
-  const focus = pct(data.first.focus_minutes, data.last.focus_minutes)
-  const dev = pct(data.first.development_minutes, data.last.development_minutes)
   const compare = [
-    { label: '공부 시간', d1: fmtMinutes(data.first.focus_minutes), d100: fmtMinutes(data.last.focus_minutes), ...focus },
-    { label: '개발 시간', d1: fmtMinutes(data.first.development_minutes), d100: fmtMinutes(data.last.development_minutes), ...dev },
+    { label: '공부 시간', d1: fmtMinutes(data.first.focus_minutes), d100: fmtMinutes(data.last.focus_minutes) },
+    { label: '개발 시간', d1: fmtMinutes(data.first.development_minutes), d100: fmtMinutes(data.last.development_minutes) },
   ]
 
   return (
@@ -1594,7 +1613,6 @@ function ResultPage() {
                   <div style={{ fontSize: 17, fontWeight: 800, color: C.white }}>{c.d100}</div>
                 </div>
               </div>
-              <div style={{ fontSize: 22, fontWeight: 900, color: c.good ? C.mint : C.faint, letterSpacing: '-0.01em' }}>{c.delta}</div>
             </div>
           ))}
         </div>
