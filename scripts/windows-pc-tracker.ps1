@@ -2,7 +2,7 @@ param(
   [string]$ApiBase = "http://localhost:4000/api",
   [string]$PairingToken = "",
   [string]$ConfigPath = "$env:USERPROFILE\.harufit-tracker.json",
-  [int]$IntervalSeconds = 15,
+  [int]$IntervalSeconds = 1,
   [int]$IdleLimitSeconds = 180,
   [switch]$InstallStartup
 )
@@ -140,7 +140,7 @@ while ($true) {
     $idleSeconds = Get-IdleSeconds
     if ($idleSeconds -lt $IdleLimitSeconds) {
       $appName = Get-ActiveAppName
-      Send-Usage $config.deviceToken $appName ([math]::Max(1, [math]::Round($IntervalSeconds / 60)))
+      Send-Usage $config.deviceToken $appName ([math]::Max(0.0167, $IntervalSeconds / 60))
       Write-Host "$(Get-Date -Format HH:mm:ss) 기록: $appName"
     } else {
       Write-Host "$(Get-Date -Format HH:mm:ss) 유휴 상태라 기록하지 않음"

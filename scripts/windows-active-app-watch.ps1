@@ -1,5 +1,5 @@
 param(
-  [int]$IntervalSeconds = 30,
+  [int]$IntervalSeconds = 1,
   [int]$IdleLimitSeconds = 180
 )
 

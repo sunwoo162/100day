@@ -114,7 +114,7 @@ async function sendDesktopUsage(appName, minutes) {
 
 function startDesktopTracker() {
   if (!isWindows || desktopTrackerProcess) return
-  const intervalSeconds = 5
+  const intervalSeconds = 1
   const idleLimitSeconds = 180
   const scriptPath = path.join(rootDir, 'scripts', 'windows-active-app-watch.ps1')
   logDesktop(`start desktop tracker: ${scriptPath}`)

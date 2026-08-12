@@ -444,7 +444,7 @@ function DashboardPage({ setPage, currentDay, onConnectDevice }: { setPage: (p: 
         })
     }
     load()
-    const interval = window.setInterval(load, 5000)
+    const interval = window.setInterval(load, 1000)
     return () => {
       cancelled = true
       window.clearInterval(interval)
