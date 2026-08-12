@@ -35,15 +35,16 @@ const WEB_ORIGIN = process.env.WEB_ORIGIN || 'http://localhost:5173'
 const API_ORIGIN = process.env.API_ORIGIN || `http://localhost:${PORT}`
 const WINDOWS_INSTALLER_PATH = process.env.HARUFIT_WINDOWS_INSTALLER_PATH || path.join(rootDir, 'desktop-release', latestWindowsInstallerName())
 const SESSION_COOKIE = 'sid'
-const SESSION_DAYS = 30
+const SESSION_DAYS = Number(process.env.SESSION_DAYS || 365)
 
-function json(res, status, data) {
+function json(res, status, data, headers = {}) {
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
     'Access-Control-Allow-Origin': WEB_ORIGIN,
     'Access-Control-Allow-Credentials': 'true',
     'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS'
+    'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS',
+    ...headers,
   })
   res.end(JSON.stringify(data))
 }
@@ -208,8 +209,14 @@ function publicUser(user) {
 function currentUser(req) {
   const token = parseCookies(req)[SESSION_COOKIE]
   if (!token) return null
-  return db.prepare(`SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id
+  return db.prepare(`SELECT u.*, s.token AS session_token FROM sessions s JOIN users u ON u.id = s.user_id
     WHERE s.token = ? AND s.expires_at > ?`).get(token, new Date().toISOString()) || null
+}
+function refreshSessionCookie(user) {
+  if (!user?.session_token) return ''
+  const expires = new Date(Date.now() + SESSION_DAYS * 86400000)
+  db.prepare('UPDATE sessions SET expires_at = ? WHERE token = ?').run(expires.toISOString(), user.session_token)
+  return sessionCookie(user.session_token, expires)
 }
 function requireUser(req, res) {
   const user = currentUser(req)
@@ -377,7 +384,11 @@ const server = http.createServer(async (req, res) => {
       return downloadFile(res, WINDOWS_INSTALLER_PATH, path.basename(WINDOWS_INSTALLER_PATH))
     }
 
-    if (url.pathname === '/api/auth/me') return json(res, 200, { user: publicUser(currentUser(req)) })
+    if (url.pathname === '/api/auth/me') {
+      const user = currentUser(req)
+      const cookie = refreshSessionCookie(user)
+      return json(res, 200, { user: publicUser(user) }, cookie ? { 'Set-Cookie': cookie } : {})
+    }
 
     if (url.pathname === '/api/auth/logout' && req.method === 'POST') {
       const token = parseCookies(req)[SESSION_COOKIE]

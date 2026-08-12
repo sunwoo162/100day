@@ -10,6 +10,7 @@ const isWindows = process.platform === 'win32'
 const devServerUrl = process.env.HARUFIT_DESKTOP_DEV_SERVER_URL || ''
 const baseAppUrl = devServerUrl || 'http://localhost:4000'
 const apiBaseUrl = 'http://localhost:4000/api'
+const desktopSessionPartition = 'persist:harufit'
 const children = new Set()
 let desktopTrackerProcess = null
 let authTrackerTimer = null
@@ -82,7 +83,7 @@ function startApiServer() {
 }
 
 async function sessionCookieHeader() {
-  const cookies = await session.defaultSession.cookies.get({ url: 'http://localhost:4000', name: 'sid' })
+  const cookies = await session.fromPartition(desktopSessionPartition).cookies.get({ url: 'http://localhost:4000', name: 'sid' })
   if (!cookies.length) return ''
   return cookies.map(cookie => `${cookie.name}=${cookie.value}`).join('; ')
 }
@@ -234,6 +235,7 @@ function createWindow() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      partition: desktopSessionPartition,
     },
   })
 
