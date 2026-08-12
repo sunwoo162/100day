@@ -9,6 +9,27 @@ import { db, dbPath } from './db.mjs'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const rootDir = path.resolve(__dirname, '..')
 const distDir = path.join(rootDir, 'dist')
+
+function loadEnvFile(filePath) {
+  if (!fs.existsSync(filePath)) return
+  const lines = fs.readFileSync(filePath, 'utf8').split(/\r?\n/)
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) continue
+    const separatorIndex = trimmed.indexOf('=')
+    if (separatorIndex < 1) continue
+    const key = trimmed.slice(0, separatorIndex).trim()
+    let value = trimmed.slice(separatorIndex + 1).trim()
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1)
+    }
+    if (!process.env[key]) process.env[key] = value
+  }
+}
+
+loadEnvFile(path.join(rootDir, '.env'))
+loadEnvFile(path.join(process.cwd(), '.env'))
+
 const PORT = Number(process.env.API_PORT || 4000)
 const WEB_ORIGIN = process.env.WEB_ORIGIN || 'http://localhost:5173'
 const API_ORIGIN = process.env.API_ORIGIN || `http://localhost:${PORT}`
@@ -241,15 +262,15 @@ function createSession(userId) {
 }
 function oauthConfig(provider) {
   if (provider === 'github') return {
-    clientId: process.env.GITHUB_CLIENT_ID,
-    clientSecret: process.env.GITHUB_CLIENT_SECRET,
+    clientId: process.env.GITHUB_CLIENT_ID || process.env.HARUFIT_GITHUB_CLIENT_ID,
+    clientSecret: process.env.GITHUB_CLIENT_SECRET || process.env.HARUFIT_GITHUB_CLIENT_SECRET,
     authUrl: 'https://github.com/login/oauth/authorize',
     tokenUrl: 'https://github.com/login/oauth/access_token',
     scope: 'read:user user:email',
   }
   if (provider === 'google') return {
-    clientId: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    clientId: process.env.GOOGLE_CLIENT_ID || process.env.HARUFIT_GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET || process.env.HARUFIT_GOOGLE_CLIENT_SECRET,
     authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
     tokenUrl: 'https://oauth2.googleapis.com/token',
     scope: 'openid email profile',
@@ -344,7 +365,7 @@ const server = http.createServer(async (req, res) => {
     if (authStart) {
       const provider = authStart[1]
       const config = oauthConfig(provider)
-      if (!config?.clientId || !config?.clientSecret) return json(res, 500, { error: `${provider} OAuth 환경변수가 없습니다` })
+      if (!config?.clientId || !config?.clientSecret) return redirect(res, `${WEB_ORIGIN}/?auth=failed&provider=${provider}&reason=missing_oauth_env`)
       const state = crypto.randomBytes(16).toString('base64url')
       const authUrl = new URL(config.authUrl)
       authUrl.searchParams.set('client_id', config.clientId)
