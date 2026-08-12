@@ -602,42 +602,6 @@ function DashboardPage({ setPage, currentDay, onConnectDevice }: { setPage: (p: 
         </div>
       </div>
 
-      {/* Connection help */}
-      <div style={{ marginTop: 16, background: 'linear-gradient(135deg, rgba(0,232,197,0.11) 0%, rgba(26,26,26,1) 46%, rgba(20,20,20,1) 100%)', borderRadius: 14, padding: '22px 24px', border: `1px solid rgba(0,232,197,0.18)`, display: 'grid', gridTemplateColumns: desktopShell ? '1fr' : '1fr auto', gap: 22, alignItems: 'center', boxShadow: '0 24px 70px rgba(0,0,0,0.22)' }}>
-        <div>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '5px 8px', borderRadius: 7, background: 'rgba(0,232,197,0.1)', border: `1px solid rgba(0,232,197,0.16)`, marginBottom: 10 }}>
-            <IcoDevice c={C.mint} />
-            <span style={{ fontSize: 10, color: C.mint, fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, letterSpacing: '0.08em' }}>WINDOWS APP</span>
-          </div>
-          <div style={{ fontSize: 18, fontWeight: 900, color: C.white, marginBottom: 7, letterSpacing: '-0.02em' }}>{desktopShell ? '하루핏 앱에서 자동 측정 중' : '하루핏 PC 앱으로 자동 측정하기'}</div>
-          <div style={{ fontSize: 11, color: C.alt, lineHeight: 1.8, marginBottom: 12 }}>
-            {desktopShell ? '현재 사용 중인 Windows 앱과 창 제목을 자동으로 기록합니다. 유휴 상태는 제외하고, 앱 사용량과 개발 시간이 5초마다 화면에 반영됩니다.' : '설치 후 로그인하면 현재 사용 중인 Windows 앱과 창 제목을 자동으로 기록합니다. 유휴 상태는 제외하고, 앱 사용량과 개발 시간이 개요에 바로 반영됩니다.'}
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-            {[
-              '앱별 시간',
-              '5초마다 화면 갱신',
-              'Windows 자동 실행',
-            ].map((text) => (
-              <div key={text} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 9px', borderRadius: 999, background: 'rgba(0,0,0,0.22)', border: `1px solid ${C.border}` }}>
-                <span style={{ width: 5, height: 5, borderRadius: 99, background: C.mint, flexShrink: 0 }} />
-                <span style={{ fontSize: 10, color: C.muted, fontWeight: 700 }}>{text}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-        {!desktopShell && (
-          <div style={{ display: 'grid', gap: 9, minWidth: 190 }}>
-            <a href={windowsInstallerUrl()} style={{ textDecoration: 'none', textAlign: 'center', padding: '12px 18px', borderRadius: 999, border: 'none', background: C.mint, color: C.ink, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 13, fontWeight: 900, cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: '0 12px 30px rgba(0,232,197,0.14)' }}>
-              Windows 다운로드
-            </a>
-            <button onClick={onConnectDevice} style={{ padding: '10px 16px', borderRadius: 999, border: `1px solid ${C.border2}`, background: 'rgba(0,0,0,0.2)', color: C.muted, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 11, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-              수동 연결
-            </button>
-          </div>
-        )}
-      </div>
-
       {/* Study CTA */}
       <div style={{ marginTop: 16, background: 'linear-gradient(135deg, rgba(0,232,197,0.06) 0%, rgba(0,232,197,0.02) 100%)', borderRadius: 14, padding: '18px 24px', border: `1px solid rgba(0,232,197,0.12)`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
