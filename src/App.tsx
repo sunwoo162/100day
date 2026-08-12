@@ -204,7 +204,7 @@ function PublicDownloadPage() {
               <span style={{ fontSize: 10, color: C.mint, fontFamily: "'JetBrains Mono', monospace", fontWeight: 900, letterSpacing: '0.1em' }}>WINDOWS FIRST</span>
             </div>
             <h1 style={{ margin: 0, fontSize: 'clamp(40px, 6.4vw, 74px)', lineHeight: 1.08, letterSpacing: 0, fontWeight: 950, color: C.white }}>
-              오늘 쓴 앱이<br />그대로 기록됩니다
+              오늘의 사용 시간이<br />자동으로 쌓입니다
             </h1>
             <p style={{ margin: '22px 0 0', maxWidth: 560, fontSize: 15, lineHeight: 1.9, color: C.muted }}>
               하루핏 PC 앱을 설치하고 앱 안에서 로그인하세요. 사용 중인 Windows 앱, 창 제목, 개발 시간을 자동으로 기록하고 대시보드로 보여줍니다.
