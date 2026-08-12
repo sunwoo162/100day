@@ -888,11 +888,12 @@ function AnalyticsPage() {
 
   const rows = data.rows
   const hasRows = rows.length > 0
-  const screenPc = rows.map((row) => row.pc_minutes / 60)
-  const focusData = rows.map((row) => row.focus_minutes / 60)
-  const developmentData = rows.map((row) => row.development_minutes / 60)
+  const screenPc = rows.map((row) => row.pc_minutes)
+  const focusData = rows.map((row) => row.focus_minutes)
+  const developmentData = rows.map((row) => row.development_minutes)
   const ghData = rows.map((row) => row.github_commits)
   const avg = (arr: number[]) => arr.length ? arr.reduce((a, v) => a + v, 0) / arr.length : 0
+  const chartMax = (arr: number[]) => Math.max(1, ...arr)
 
   const insights = buildInsights(rows)
 
@@ -900,7 +901,7 @@ function AnalyticsPage() {
   const apps = data.topApps.map((app, i) => ({
     name: app.name,
     pct: Math.round((app.minutes / maxAppMinutes) * 100),
-    hours: Math.round(app.minutes / 60),
+    time: fmtMinutes(app.minutes),
     color: i === 0 ? C.mint : '#2a2a2a',
   }))
 
@@ -926,29 +927,29 @@ function AnalyticsPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
         {/* Screen time */}
-        <ChartCard title="PC 시간" subtitle="시간 / 일">
+        <ChartCard title="PC 시간" subtitle="일자별 사용 시간">
           <div style={{ display: 'flex', gap: 14, marginBottom: 12 }}>
             <Legend color={C.mint} label="PC" />
           </div>
-          {hasRows ? <BarChartSVG data={screenPc} maxVal={10} color={C.mint} h={90} /> : <EmptyChart height={90} />}
+          {hasRows ? <BarChartSVG data={screenPc} maxVal={chartMax(screenPc)} color={C.mint} h={90} /> : <EmptyChart height={90} />}
         </ChartCard>
 
         {/* Focus */}
-        <ChartCard title="공부 시간" subtitle="시간 / 일">
+        <ChartCard title="공부 시간" subtitle="일자별 공부 시간">
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12 }}>
-            <span style={{ fontSize: 26, fontWeight: 800, color: C.white }}>{avg(focusData).toFixed(1)}시간</span>
+            <span style={{ fontSize: 26, fontWeight: 800, color: C.white }}>{fmtMinutes(avg(focusData))}</span>
             <span style={{ fontSize: 10, color: C.mint }}>평균</span>
           </div>
-          {hasRows ? <BarChartSVG data={focusData} maxVal={5} color={C.mint} h={90} /> : <EmptyChart height={90} />}
+          {hasRows ? <BarChartSVG data={focusData} maxVal={chartMax(focusData)} color={C.mint} h={90} /> : <EmptyChart height={90} />}
         </ChartCard>
 
         {/* Development */}
-        <ChartCard title="개발 시간" subtitle="시간 / 일">
+        <ChartCard title="개발 시간" subtitle="일자별 개발 시간">
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12 }}>
-            <span style={{ fontSize: 26, fontWeight: 800, color: C.white }}>{avg(developmentData).toFixed(1)}시간</span>
+            <span style={{ fontSize: 26, fontWeight: 800, color: C.white }}>{fmtMinutes(avg(developmentData))}</span>
             <span style={{ fontSize: 10, color: C.mint }}>평균</span>
           </div>
-          {hasRows ? <BarChartSVG data={developmentData} maxVal={5} color={C.mintBright} h={90} /> : <EmptyChart height={90} />}
+          {hasRows ? <BarChartSVG data={developmentData} maxVal={chartMax(developmentData)} color={C.mintBright} h={90} /> : <EmptyChart height={90} />}
         </ChartCard>
       </div>
 
@@ -968,7 +969,7 @@ function AnalyticsPage() {
                   <AppIconMini name={a.name} />
                   <span style={{ fontSize: 12, color: C.muted }}>{a.name}</span>
                 </div>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.alt }}>{a.hours}시간</span>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.alt }}>{a.time}</span>
               </div>
               <div style={{ height: 3, background: C.border, borderRadius: 2 }}>
                 <div style={{ width: `${a.pct}%`, height: '100%', background: a.color, borderRadius: 2 }} />
