@@ -237,11 +237,6 @@ function PublicDownloadPage() {
                 </div>
               </div>
             ))}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginTop: 30 }}>
-              {['앱별 시간', '유휴 제외', '자동 동기화'].map((label) => (
-                <div key={label} style={{ background: 'rgba(0,0,0,0.24)', border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px 10px', textAlign: 'center', color: C.muted, fontSize: 11, fontWeight: 800 }}>{label}</div>
-              ))}
-            </div>
           </section>
         </main>
       </div>
