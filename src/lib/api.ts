@@ -121,6 +121,7 @@ export const api = {
   createDevicePairing: (data: { kind: string; name: string; platform: string }) => request<DevicePairingData>('/devices/pairing', { method: 'POST', body: JSON.stringify(data) }),
   connectDevice: (data: { token: string }) => request<DeviceData>('/devices/connect', { method: 'POST', body: JSON.stringify(data) }),
   disconnectDevice: (id: number) => request<void>(`/devices/${id}`, { method: 'DELETE' }),
+  trackBrowser: (data: { minutes: number; app_name: string }) => request<{ ok: boolean }>('/track/browser', { method: 'POST', body: JSON.stringify(data) }),
   studyCategories: () => request<StudyCategory[]>('/study/categories'),
   addStudyCategory: (data: { name: string }) => request<StudyCategory>('/study/categories', { method: 'POST', body: JSON.stringify(data) }),
   focusSessions: (day = 37) => request<FocusSession[]>(`/focus/sessions?day=${day}`),

@@ -12,6 +12,7 @@ const distDir = path.join(rootDir, 'dist')
 const PORT = Number(process.env.API_PORT || 4000)
 const WEB_ORIGIN = process.env.WEB_ORIGIN || 'http://localhost:5173'
 const API_ORIGIN = process.env.API_ORIGIN || `http://localhost:${PORT}`
+const WINDOWS_INSTALLER_PATH = process.env.HARUFIT_WINDOWS_INSTALLER_PATH || path.join(rootDir, 'desktop-release', '하루핏 Setup 0.1.0.exe')
 const SESSION_COOKIE = 'sid'
 const SESSION_DAYS = 30
 
@@ -46,6 +47,7 @@ const contentTypes = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
+  '.ps1': 'text/plain; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
   '.png': 'image/png',
@@ -55,6 +57,14 @@ function staticFile(res, filePath) {
   const ext = path.extname(filePath)
   res.writeHead(200, { 'Content-Type': contentTypes[ext] || 'application/octet-stream' })
   fs.createReadStream(filePath).pipe(res)
+}
+function downloadFile(res, filePath, filename, contentType = 'application/octet-stream') {
+  if (!fs.existsSync(filePath)) return json(res, 404, { error: '다운로드 파일을 찾을 수 없습니다' })
+  res.writeHead(200, {
+    'Content-Type': contentType,
+    'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
+  })
+  return fs.createReadStream(filePath).pipe(res)
 }
 function serveStatic(req, res, url) {
   if (!['GET', 'HEAD'].includes(req.method || '')) return json(res, 405, { error: '허용되지 않는 메서드입니다' })
@@ -107,7 +117,28 @@ function requestedDay(url, challenge) {
   const day = Number(url.searchParams.get('day') || currentDay(challenge))
   return Math.max(1, Math.min(challenge.target_days, Number.isFinite(day) ? day : currentDay(challenge)))
 }
-function formatMinutes(min) { return `${Math.floor(min/60)}h ${String(min%60).padStart(2,'0')}m` }
+function formatMinutes(min) {
+  const totalSeconds = Math.round((Number(min) || 0) * 60)
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  return `${hours}h ${String(minutes).padStart(2,'0')}m ${String(seconds).padStart(2,'0')}s`
+}
+function isDevelopmentApp(appName) {
+  return /code|visual studio|vscode|cursor|webstorm|intellij|pycharm|terminal|powershell|cmd|git|github|node|npm|pnpm|vite|localhost|devtools|하루핏/i.test(appName)
+}
+function recordPcUsage(userId, source, appName, minutes, occurredAt = new Date()) {
+  const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(occurredAt)
+  const challenge = getUserChallenge(userId)
+  const day = dayForDate(challenge, date)
+  ensureMetric(userId, challenge, day)
+  const devMinutes = isDevelopmentApp(appName) ? minutes : 0
+  db.prepare('UPDATE daily_metrics SET pc_minutes = pc_minutes + ?, development_minutes = development_minutes + ? WHERE user_id = ? AND challenge_id = ? AND day_number = ?')
+    .run(minutes, devMinutes, userId, challenge.id, day)
+  db.prepare('INSERT INTO app_usage (user_id, day_number, source, app_name, minutes) VALUES (?, ?, ?, ?, ?)')
+    .run(userId, day, source, appName, minutes)
+  return { day_number: day, minutes }
+}
 function parseCookies(req) {
   return Object.fromEntries(String(req.headers.cookie || '').split(';').map(part => {
     const [key, ...value] = part.trim().split('=')
@@ -287,6 +318,15 @@ const server = http.createServer(async (req, res) => {
   try {
     if (url.pathname === '/api/health') return json(res, 200, { ok: true, database: dbPath })
 
+    if (url.pathname === '/downloads/windows-pc-tracker.ps1' && req.method === 'GET') {
+      const trackerPath = path.join(rootDir, 'scripts', 'windows-pc-tracker.ps1')
+      return downloadFile(res, trackerPath, 'windows-pc-tracker.ps1', 'text/plain; charset=utf-8')
+    }
+
+    if (url.pathname === '/downloads/harufit-windows' && req.method === 'GET') {
+      return downloadFile(res, WINDOWS_INSTALLER_PATH, '하루핏 Setup 0.1.0.exe')
+    }
+
     if (url.pathname === '/api/auth/me') return json(res, 200, { user: publicUser(currentUser(req)) })
 
     if (url.pathname === '/api/auth/logout' && req.method === 'POST') {
@@ -433,17 +473,29 @@ const server = http.createServer(async (req, res) => {
       if (!minutes) return json(res, 400, { error: 'minutes 값이 필요합니다' })
       const appName = String(body.app_name || 'Unknown').trim().slice(0, 120) || 'Unknown'
       const occurredAt = body.occurred_at ? new Date(body.occurred_at) : new Date()
-      const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(occurredAt)
-      const challenge = getUserChallenge(device.user_id)
-      const day = dayForDate(challenge, date)
-      ensureMetric(device.user_id, challenge, day)
-      db.prepare('UPDATE daily_metrics SET pc_minutes = pc_minutes + ? WHERE user_id = ? AND challenge_id = ? AND day_number = ?')
-        .run(minutes, device.user_id, challenge.id, day)
-      db.prepare('INSERT INTO app_usage (user_id, day_number, source, app_name, minutes) VALUES (?, ?, ?, ?, ?)')
-        .run(device.user_id, day, 'pc', appName, minutes)
+      const tracked = recordPcUsage(device.user_id, 'pc', appName, minutes, occurredAt)
       db.prepare('UPDATE devices SET last_sync = ?, source = ? WHERE id = ?')
         .run(new Date().toISOString(), 'pc-tracker', device.id)
-      return json(res, 201, { ok: true, day_number: day, minutes })
+      return json(res, 201, { ok: true, ...tracked })
+    }
+
+    if (url.pathname === '/api/track/browser' && req.method === 'POST') {
+      const user = requireUser(req, res); if (!user) return
+      const body = await readBody(req)
+      const minutes = Math.max(0, Math.min(30, Number(body.minutes || 0)))
+      if (!minutes) return json(res, 400, { error: 'minutes 값이 필요합니다' })
+      const appName = String(body.app_name || '하루핏 웹').trim().slice(0, 120) || '하루핏 웹'
+      return json(res, 201, { ok: true, ...recordPcUsage(user.id, 'browser', appName, minutes) })
+    }
+
+    if (url.pathname === '/api/track/desktop' && req.method === 'POST') {
+      const user = requireUser(req, res); if (!user) return
+      const body = await readBody(req)
+      const minutes = Math.max(0, Math.min(30, Number(body.minutes || 0)))
+      if (!minutes) return json(res, 400, { error: 'minutes 값이 필요합니다' })
+      const appName = String(body.app_name || 'Unknown').trim().slice(0, 160) || 'Unknown'
+      const occurredAt = body.occurred_at ? new Date(body.occurred_at) : new Date()
+      return json(res, 201, { ok: true, ...recordPcUsage(user.id, 'desktop', appName, minutes, occurredAt) })
     }
 
     if (url.pathname === '/api/track/phone' && req.method === 'POST') {

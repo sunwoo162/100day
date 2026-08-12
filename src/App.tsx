@@ -73,21 +73,54 @@ function urlForPage(page: Page) {
 }
 
 function fmtMinutes(min: number) {
-  const h = Math.floor(min / 60)
-  const m = min % 60
-  if (h <= 0) return `${m}분`
-  return `${h}시간 ${String(m).padStart(2, '0')}분`
+  const totalSeconds = Math.round((Number(min) || 0) * 60)
+  const h = Math.floor(totalSeconds / 3600)
+  const m = Math.floor((totalSeconds % 3600) / 60)
+  const s = totalSeconds % 60
+  if (h <= 0 && m <= 0) return `${s}초`
+  if (h <= 0) return `${m}분 ${String(s).padStart(2, '0')}초`
+  return `${h}시간 ${String(m).padStart(2, '0')}분 ${String(s).padStart(2, '0')}초`
 }
 
 function fmtDelta(delta: number, unit = '분') {
   if (delta === 0) return '어제와 같음'
+  if (unit === '분') return `어제보다 ${delta > 0 ? '+' : '-'}${fmtMinutes(Math.abs(delta))}`
   return `어제보다 ${delta > 0 ? '+' : '-'}${Math.abs(delta).toLocaleString()}${unit}`
 }
 
 function parseHourValue(display: string) {
   const hours = display.match(/(\d+)h/)?.[1] ?? '0'
   const mins = display.match(/(\d+)m/)?.[1] ?? '0'
-  return `${Number(hours)}시간 ${String(Number(mins)).padStart(2, '0')}분`
+  const secs = display.match(/(\d+)s/)?.[1] ?? '0'
+  return `${Number(hours)}시간 ${String(Number(mins)).padStart(2, '0')}분 ${String(Number(secs)).padStart(2, '0')}초`
+}
+
+function browserUsageName() {
+  return '하루핏 웹'
+}
+
+function isDesktopShell() {
+  return /\bElectron\//.test(navigator.userAgent)
+}
+
+function apiBaseUrl() {
+  const configured = import.meta.env.VITE_API_BASE_URL || '/api'
+  if (/^https?:\/\//.test(configured)) return configured.replace(/\/$/, '')
+  return `${window.location.origin}${configured.startsWith('/') ? configured : `/${configured}`}`.replace(/\/$/, '')
+}
+
+function downloadBaseUrl() {
+  return apiBaseUrl().replace(/\/api$/, '')
+}
+
+function windowsTrackerCommand(pairingToken: string) {
+  const downloadUrl = `${downloadBaseUrl()}/downloads/windows-pc-tracker.ps1`
+  const apiUrl = apiBaseUrl()
+  return `powershell -NoProfile -ExecutionPolicy Bypass -Command "$u='${downloadUrl}'; $p=Join-Path $env:TEMP 'harufit-tracker.ps1'; Invoke-WebRequest -UseBasicParsing $u -OutFile $p; powershell -NoProfile -ExecutionPolicy Bypass -File $p -ApiBase '${apiUrl}' -PairingToken '${pairingToken}' -InstallStartup"`
+}
+
+function windowsInstallerUrl() {
+  return `${downloadBaseUrl()}/downloads/harufit-windows`
 }
 
 function shortTime(iso: string | null) {
@@ -145,12 +178,81 @@ function LoginPage() {
   )
 }
 
+function PublicDownloadPage() {
+  return (
+    <div style={{ minHeight: '100vh', background: C.canvas, color: C.white, fontFamily: "'Pretendard', system-ui, sans-serif", overflow: 'hidden' }}>
+      <div style={{ minHeight: '100vh', display: 'grid', gridTemplateRows: 'auto 1fr', padding: '24px clamp(20px, 5vw, 56px)' }}>
+        <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 18 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+            <LogoMark />
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 900, color: C.white, letterSpacing: '-0.02em' }}>하루핏</div>
+              <div style={{ fontSize: 10, color: C.alt, fontFamily: "'JetBrains Mono', monospace" }}>desktop activity tracker</div>
+            </div>
+          </div>
+          <a href={windowsInstallerUrl()} style={{ textDecoration: 'none', padding: '10px 16px', borderRadius: 999, background: C.mint, color: C.ink, fontSize: 12, fontWeight: 900, whiteSpace: 'nowrap' }}>Windows 다운로드</a>
+        </header>
+
+        <main style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(360px, 520px)', gap: 'clamp(28px, 6vw, 76px)', alignItems: 'center', padding: '46px 0 36px' }}>
+          <section>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 9px', borderRadius: 8, background: 'rgba(0,232,197,0.1)', border: `1px solid rgba(0,232,197,0.16)`, marginBottom: 18 }}>
+              <IcoDevice c={C.mint} />
+              <span style={{ fontSize: 10, color: C.mint, fontFamily: "'JetBrains Mono', monospace", fontWeight: 900, letterSpacing: '0.1em' }}>WINDOWS FIRST</span>
+            </div>
+            <h1 style={{ margin: 0, fontSize: 'clamp(46px, 8vw, 92px)', lineHeight: 0.92, letterSpacing: '-0.055em', fontWeight: 950, color: C.white }}>
+              오늘 쓴 앱이<br />그대로 기록됩니다
+            </h1>
+            <p style={{ margin: '22px 0 0', maxWidth: 560, fontSize: 15, lineHeight: 1.9, color: C.muted }}>
+              하루핏 PC 앱을 설치하고 앱 안에서 로그인하세요. 사용 중인 Windows 앱, 창 제목, 개발 시간을 자동으로 기록하고 대시보드로 보여줍니다.
+            </p>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 28 }}>
+              <a href={windowsInstallerUrl()} style={{ textDecoration: 'none', padding: '14px 22px', borderRadius: 999, background: C.mint, color: C.ink, fontSize: 14, fontWeight: 950, boxShadow: '0 18px 42px rgba(0,232,197,0.16)' }}>Windows 앱 다운로드</a>
+              <div style={{ padding: '14px 16px', borderRadius: 999, border: `1px solid ${C.border2}`, color: C.alt, fontSize: 12, fontWeight: 800 }}>로그인은 앱에서 진행</div>
+            </div>
+          </section>
+
+          <section style={{ background: 'linear-gradient(145deg, rgba(0,232,197,0.12), rgba(26,26,26,1) 38%, rgba(13,13,13,1))', border: `1px solid rgba(0,232,197,0.16)`, borderRadius: 18, padding: 24, boxShadow: '0 34px 100px rgba(0,0,0,0.32)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28 }}>
+              <div>
+                <div style={{ fontSize: 12, color: C.soft, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', fontWeight: 900 }}>LIVE APPS</div>
+                <div style={{ fontSize: 11, color: C.alt, marginTop: 4 }}>설치 후 자동 측정</div>
+              </div>
+              <div style={{ width: 38, height: 38, borderRadius: 12, background: C.mint, color: C.ink, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 950 }}>H</div>
+            </div>
+            {[
+              ['Code - 하루핏', '1시간 12분', 92],
+              ['Chrome - 문서', '38분', 52],
+              ['Terminal - pnpm', '24분', 34],
+            ].map(([name, time, pct]) => (
+              <div key={name} style={{ marginBottom: 18 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14, marginBottom: 7 }}>
+                  <span style={{ color: C.white, fontSize: 13, fontWeight: 800 }}>{name}</span>
+                  <span style={{ color: C.alt, fontSize: 11, fontFamily: "'JetBrains Mono', monospace" }}>{time}</span>
+                </div>
+                <div style={{ height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 99 }}>
+                  <div style={{ width: `${pct}%`, height: '100%', background: C.mint, borderRadius: 99 }} />
+                </div>
+              </div>
+            ))}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginTop: 30 }}>
+              {['앱별 시간', '유휴 제외', '자동 동기화'].map((label) => (
+                <div key={label} style={{ background: 'rgba(0,0,0,0.24)', border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px 10px', textAlign: 'center', color: C.muted, fontSize: 11, fontWeight: 800 }}>{label}</div>
+              ))}
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
   const [page, setPage] = useState<Page>(() => pageFromLocation())
   const [menuOpen, setMenuOpen] = useState(false)
   const [challenge, setChallenge] = useState<ChallengeData | null>(null)
   const [user, setUser] = useState<AuthUser | null>(null)
   const [authLoading, setAuthLoading] = useState(true)
+  const [autoPairComputer, setAutoPairComputer] = useState(false)
 
   useEffect(() => {
     api.me()
@@ -170,6 +272,34 @@ export default function App() {
     api.challenge().then(setChallenge).catch(() => setChallenge(null))
   }, [user])
 
+  useEffect(() => {
+    if (!user) return
+    if (isDesktopShell()) return
+    let lastSentAt = Date.now()
+    const sendBrowserUsage = () => {
+      if (document.hidden) {
+        lastSentAt = Date.now()
+        return
+      }
+      const now = Date.now()
+      const minutes = Math.min(0.5, Math.max(0, (now - lastSentAt) / 60000))
+      lastSentAt = now
+      if (minutes < 0.05) return
+      api.trackBrowser({ minutes, app_name: browserUsageName() }).catch(() => {})
+    }
+    const interval = window.setInterval(sendBrowserUsage, 15000)
+    const onVisibilityChange = () => {
+      if (document.hidden) sendBrowserUsage()
+      else lastSentAt = Date.now()
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      sendBrowserUsage()
+    }
+  }, [user])
+
   const logout = async () => {
     await api.logout().catch(() => {})
     setUser(null)
@@ -187,7 +317,7 @@ export default function App() {
   }
 
   if (authLoading) return <LoadingBlock label="로그인 상태를 확인하는 중입니다" />
-  if (!user) return <LoginPage />
+  if (!user) return isDesktopShell() ? <LoginPage /> : <PublicDownloadPage />
 
   const currentDay = challenge?.currentDay ?? 1
   return (
@@ -195,11 +325,11 @@ export default function App() {
       <Sidebar page={page} setPage={navigatePage} open={menuOpen} setOpen={setMenuOpen} currentDay={currentDay} user={user} onLogout={logout} />
       <main style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }} className="scrollbar-none">
         <MobileTopbar page={page} onMenu={() => setMenuOpen(true)} />
-        {page === 'dashboard' && <DashboardPage setPage={navigatePage} currentDay={currentDay} />}
+        {page === 'dashboard' && <DashboardPage setPage={navigatePage} currentDay={currentDay} onConnectDevice={() => { setAutoPairComputer(true); navigatePage('devices') }} />}
         {page === 'timeline'  && <TimelinePage currentDay={currentDay} />}
         {page === 'analytics' && <AnalyticsPage />}
         {page === 'focus'     && <FocusPage currentDay={currentDay} />}
-        {page === 'devices'   && <DevicesPage />}
+        {page === 'devices'   && <DevicesPage autoPairComputer={autoPairComputer} onAutoPairHandled={() => setAutoPairComputer(false)} />}
         {page === 'result'    && <ResultPage />}
       </main>
       {menuOpen && <div onClick={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', zIndex: 39 }} />}
@@ -294,41 +424,56 @@ function MobileTopbar({ page, onMenu }: { page: Page; onMenu: () => void }) {
 /* ═══════════════════════════════════════════════
    DASHBOARD
 ═══════════════════════════════════════════════ */
-function DashboardPage({ setPage, currentDay }: { setPage: (p: Page) => void; currentDay: number }) {
+function DashboardPage({ setPage, currentDay, onConnectDevice }: { setPage: (p: Page) => void; currentDay: number; onConnectDevice: () => void }) {
   const [data, setData] = useState<DashboardData | null>(null)
   const [error, setError] = useState('')
+  const [now, setNow] = useState(() => Date.now())
+  const liveStartRef = useRef(Date.now())
+  const lastPcMinutesRef = useRef<number | null>(null)
 
   useEffect(() => {
     api.dashboard(currentDay).then(setData).catch((err) => setError(err.message))
   }, [currentDay])
 
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(interval)
+  }, [])
+
   if (error) return <ErrorBlock message={error} />
   if (!data) return <LoadingBlock />
 
   const m = data.metrics
+  if (lastPcMinutesRef.current !== m.pc.minutes) {
+    lastPcMinutesRef.current = m.pc.minutes ?? 0
+    liveStartRef.current = now
+  }
+  const liveMinutes = document.hidden ? 0 : Math.max(0, (now - liveStartRef.current) / 60000)
+  const pcDisplayMinutes = (m.pc.minutes ?? 0) + liveMinutes
+  const developmentDisplayMinutes = (m.development.minutes ?? 0) + liveMinutes
   const recent = data.recent ?? []
   const hasRecent = recent.length > 0
   const spark = {
     pc: recent.map((row) => row.pc_minutes / 60),
-    phone: recent.map((row) => row.phone_minutes / 60),
     focus: recent.map((row) => row.focus_minutes / 60),
-    steps: recent.map((row) => row.steps),
-    exercise: recent.map((row) => row.exercise_minutes),
     development: recent.map((row) => row.development_minutes / 60),
     github: recent.map((row) => row.github_commits),
   }
   const stats = [
-    { id: 'pc', label: 'PC', value: parseHourValue(m.pc.display || '0h 00m'), sub: fmtDelta(m.pc.delta), up: m.pc.delta >= 0, spark: spark.pc, max: 10, color: C.mint },
-    { id: 'phone', label: '휴대폰', value: parseHourValue(m.phone.display || '0h 00m'), sub: fmtDelta(m.phone.delta), up: m.phone.delta <= 0, spark: spark.phone, max: 10, color: C.faint },
+    { id: 'pc', label: 'PC', value: fmtMinutes(pcDisplayMinutes), sub: fmtDelta(m.pc.delta), up: m.pc.delta >= 0, spark: spark.pc, max: 10, color: C.mint },
     { id: 'focus', label: '공부', value: parseHourValue(m.focus.display || '0h 00m'), sub: fmtDelta(m.focus.delta), up: m.focus.delta >= 0, spark: spark.focus, max: 5, color: C.mint },
-    { id: 'steps', label: '걸음', value: (m.steps.value || 0).toLocaleString(), sub: fmtDelta(m.steps.delta, ''), up: m.steps.delta >= 0, spark: spark.steps, max: 12000, color: C.mint },
-    { id: 'ex', label: '운동', value: fmtMinutes(m.exercise.minutes || 0), sub: fmtDelta(m.exercise.delta), up: m.exercise.delta >= 0, spark: spark.exercise, max: 90, color: C.mintMuted },
-    { id: 'dev', label: '개발', value: parseHourValue(m.development.display || '0h 00m'), sub: fmtDelta(m.development.delta), up: m.development.delta >= 0, spark: spark.development, max: 5, color: C.mintBright },
+    { id: 'dev', label: '개발', value: fmtMinutes(developmentDisplayMinutes), sub: fmtDelta(m.development.delta), up: m.development.delta >= 0, spark: spark.development, max: 5, color: C.mintBright },
     { id: 'git', label: 'GitHub', value: `커밋 ${m.github.commits || 0}개`, sub: fmtDelta(m.github.delta, ''), up: m.github.delta >= 0, spark: spark.github, max: 12, color: C.mint },
   ]
 
-  const maxAppMinutes = Math.max(1, ...data.apps.map((app) => app.minutes))
-  const apps = data.apps.map((app, i) => ({
+  const appTotals = new Map<string, { name: string; minutes: number }>()
+  data.apps.forEach((app) => appTotals.set(app.name, { name: app.name, minutes: app.minutes }))
+  const liveAppName = browserUsageName()
+  const currentApp = appTotals.get(liveAppName)
+  appTotals.set(liveAppName, { name: liveAppName, minutes: (currentApp?.minutes ?? 0) + liveMinutes })
+  const appRows = [...appTotals.values()].filter((app) => app.minutes > 0).sort((a, b) => b.minutes - a.minutes).slice(0, 8)
+  const maxAppMinutes = Math.max(1 / 60, ...appRows.map((app) => app.minutes))
+  const apps = appRows.map((app, i) => ({
     name: app.name,
     dur: fmtMinutes(app.minutes),
     pct: Math.round((app.minutes / maxAppMinutes) * 100),
@@ -345,10 +490,8 @@ function DashboardPage({ setPage, currentDay }: { setPage: (p: Page) => void; cu
     dot: event.type === 'development' ? C.mint : event.type === 'focus' ? C.mintBright : event.type === 'health' ? C.mintMuted : '#3a3a3a',
   }))
 
-  const pcMinutes = m.pc.minutes ?? 0
-  const phoneMinutes = m.phone.minutes ?? 0
-  const deviceTotal = pcMinutes + phoneMinutes
-  const devPcts = deviceTotal > 0 ? [pcMinutes / deviceTotal, phoneMinutes / deviceTotal] : [0, 0]
+  const deviceTotal = pcDisplayMinutes
+  const devPcts = deviceTotal > 0 ? [1] : [0]
 
   return (
     <div style={{ padding: '32px 36px', maxWidth: 1080 }}>
@@ -393,8 +536,7 @@ function DashboardPage({ setPage, currentDay }: { setPage: (p: Page) => void; cu
           <DeviceRing pcts={devPcts} />
           <div style={{ marginTop: 18, width: '100%' }}>
             {[
-              { label: '노트북', val: parseHourValue(m.pc.display || '0h 00m'), color: C.mint },
-              { label: '휴대폰',  val: parseHourValue(m.phone.display || '0h 00m'), color: C.mintMuted },
+              { label: '노트북', val: fmtMinutes(pcDisplayMinutes), color: C.mint },
             ].map((d) => (
               <div key={d.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 9 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
@@ -439,6 +581,40 @@ function DashboardPage({ setPage, currentDay }: { setPage: (p: Page) => void; cu
               </div>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Connection help */}
+      <div style={{ marginTop: 16, background: 'linear-gradient(135deg, rgba(0,232,197,0.11) 0%, rgba(26,26,26,1) 46%, rgba(20,20,20,1) 100%)', borderRadius: 14, padding: '22px 24px', border: `1px solid rgba(0,232,197,0.18)`, display: 'grid', gridTemplateColumns: '1fr auto', gap: 22, alignItems: 'center', boxShadow: '0 24px 70px rgba(0,0,0,0.22)' }}>
+        <div>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '5px 8px', borderRadius: 7, background: 'rgba(0,232,197,0.1)', border: `1px solid rgba(0,232,197,0.16)`, marginBottom: 10 }}>
+            <IcoDevice c={C.mint} />
+            <span style={{ fontSize: 10, color: C.mint, fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, letterSpacing: '0.08em' }}>WINDOWS APP</span>
+          </div>
+          <div style={{ fontSize: 18, fontWeight: 900, color: C.white, marginBottom: 7, letterSpacing: '-0.02em' }}>하루핏 PC 앱으로 자동 측정하기</div>
+          <div style={{ fontSize: 11, color: C.alt, lineHeight: 1.8, marginBottom: 12 }}>
+            설치 후 로그인하면 현재 사용 중인 Windows 앱과 창 제목을 자동으로 기록합니다. 유휴 상태는 제외하고, 앱 사용량과 개발 시간이 개요에 바로 반영됩니다.
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+            {[
+              '앱별 시간',
+              '15초마다 동기화',
+              'Windows 자동 실행',
+            ].map((text) => (
+              <div key={text} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 9px', borderRadius: 999, background: 'rgba(0,0,0,0.22)', border: `1px solid ${C.border}` }}>
+                <span style={{ width: 5, height: 5, borderRadius: 99, background: C.mint, flexShrink: 0 }} />
+                <span style={{ fontSize: 10, color: C.muted, fontWeight: 700 }}>{text}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{ display: 'grid', gap: 9, minWidth: 190 }}>
+          <a href={windowsInstallerUrl()} style={{ textDecoration: 'none', textAlign: 'center', padding: '12px 18px', borderRadius: 999, border: 'none', background: C.mint, color: C.ink, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 13, fontWeight: 900, cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: '0 12px 30px rgba(0,232,197,0.14)' }}>
+            Windows 다운로드
+          </a>
+          <button onClick={onConnectDevice} style={{ padding: '10px 16px', borderRadius: 999, border: `1px solid ${C.border2}`, background: 'rgba(0,0,0,0.2)', color: C.muted, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 11, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            수동 연결
+          </button>
         </div>
       </div>
 
@@ -545,7 +721,7 @@ function TimelinePage({ currentDay }: { currentDay: number }) {
           <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 4 }}>선택한 날짜</div>
           <div style={{ fontSize: 34, fontWeight: 900, color: C.white, letterSpacing: '-0.03em', marginBottom: 18 }}>{sel}일차</div>
 
-          {d ? [['총 사용 시간', fmtMinutes(usageMinutes(d))], ['PC', fmtMinutes(d.pc_minutes)], ['휴대폰', fmtMinutes(d.phone_minutes)], ['공부', fmtMinutes(d.focus_minutes)], ['걸음', d.steps.toLocaleString()]].map(([k, v]) => (
+          {d ? [['총 사용 시간', fmtMinutes(usageMinutes(d))], ['PC', fmtMinutes(d.pc_minutes)], ['공부', fmtMinutes(d.focus_minutes)], ['개발', fmtMinutes(d.development_minutes)]].map(([k, v]) => (
             <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 0', borderBottom: `1px solid ${C.border}` }}>
               <span style={{ fontSize: 12, color: C.muted, fontWeight: 600 }}>{k}</span>
               <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: C.muted }}>{v}</span>
@@ -595,9 +771,8 @@ function AnalyticsPage() {
   const rows = data.rows
   const hasRows = rows.length > 0
   const screenPc = rows.map((row) => row.pc_minutes / 60)
-  const screenPhone = rows.map((row) => row.phone_minutes / 60)
   const focusData = rows.map((row) => row.focus_minutes / 60)
-  const stepsData = rows.map((row) => row.steps)
+  const developmentData = rows.map((row) => row.development_minutes / 60)
   const ghData = rows.map((row) => row.github_commits)
   const avg = (arr: number[]) => arr.length ? arr.reduce((a, v) => a + v, 0) / arr.length : 0
 
@@ -633,12 +808,11 @@ function AnalyticsPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
         {/* Screen time */}
-        <ChartCard title="화면 시간" subtitle="PC vs 휴대폰 · 시간/일">
+        <ChartCard title="PC 시간" subtitle="시간 / 일">
           <div style={{ display: 'flex', gap: 14, marginBottom: 12 }}>
             <Legend color={C.mint} label="PC" />
-            <Legend color="#3a3a3a" label="휴대폰" />
           </div>
-          {hasRows ? <DualLineChart a={screenPc} b={screenPhone} maxVal={10} colorA={C.mint} colorB="#4a4a4a" h={90} /> : <EmptyChart height={90} />}
+          {hasRows ? <BarChartSVG data={screenPc} maxVal={10} color={C.mint} h={90} /> : <EmptyChart height={90} />}
         </ChartCard>
 
         {/* Focus */}
@@ -650,13 +824,13 @@ function AnalyticsPage() {
           {hasRows ? <BarChartSVG data={focusData} maxVal={5} color={C.mint} h={90} /> : <EmptyChart height={90} />}
         </ChartCard>
 
-        {/* Steps */}
-        <ChartCard title="걸음 수" subtitle="일일 걸음 수">
+        {/* Development */}
+        <ChartCard title="개발 시간" subtitle="시간 / 일">
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12 }}>
-            <span style={{ fontSize: 26, fontWeight: 800, color: C.white }}>{(avg(stepsData) / 1000).toFixed(1)}천</span>
+            <span style={{ fontSize: 26, fontWeight: 800, color: C.white }}>{avg(developmentData).toFixed(1)}시간</span>
             <span style={{ fontSize: 10, color: C.mint }}>평균</span>
           </div>
-          {hasRows ? <BarChartSVG data={stepsData.map(v => v / 1000)} maxVal={10} color="#2a2a2a" accent={C.mint} h={90} /> : <EmptyChart height={90} />}
+          {hasRows ? <BarChartSVG data={developmentData} maxVal={5} color={C.mintBright} h={90} /> : <EmptyChart height={90} />}
         </ChartCard>
       </div>
 
@@ -733,11 +907,11 @@ function buildInsights(rows: TimelineEntry[]) {
   const first = rows[0]
   const last = rows[rows.length - 1]
   const insights: { icon: string; text: string }[] = []
-  const phoneDiff = last.phone_minutes - first.phone_minutes
   const studyDiff = last.focus_minutes - first.focus_minutes
+  const devDiff = last.development_minutes - first.development_minutes
   const commitTotal = rows.reduce((sum, row) => sum + row.github_commits, 0)
-  if (phoneDiff !== 0) insights.push({ icon: phoneDiff < 0 ? '↓' : '↑', text: `기간 첫 기록 대비 휴대폰 사용이 ${fmtMinutes(Math.abs(phoneDiff))} ${phoneDiff < 0 ? '줄었습니다.' : '늘었습니다.'}` })
   if (studyDiff !== 0) insights.push({ icon: studyDiff > 0 ? '↑' : '↓', text: `기간 첫 기록 대비 공부 시간이 ${fmtMinutes(Math.abs(studyDiff))} ${studyDiff > 0 ? '늘었습니다.' : '줄었습니다.'}` })
+  if (devDiff !== 0) insights.push({ icon: devDiff > 0 ? '↑' : '↓', text: `기간 첫 기록 대비 개발 시간이 ${fmtMinutes(Math.abs(devDiff))} ${devDiff > 0 ? '늘었습니다.' : '줄었습니다.'}` })
   if (commitTotal > 0) insights.push({ icon: '•', text: `선택 기간에 GitHub 커밋 ${commitTotal}개가 기록됐습니다.` })
   return insights
 }
@@ -947,7 +1121,7 @@ function FocusPage({ currentDay }: { currentDay: number }) {
 /* ═══════════════════════════════════════════════
    DEVICES
 ═══════════════════════════════════════════════ */
-function DevicesPage() {
+function DevicesPage({ autoPairComputer, onAutoPairHandled }: { autoPairComputer?: boolean; onAutoPairHandled?: () => void }) {
   const [qr, setQr] = useState(false)
   const [devices, setDevices] = useState<DeviceData[]>([])
   const [pairing, setPairing] = useState<DevicePairingData | null>(null)
@@ -960,6 +1134,12 @@ function DevicesPage() {
   const refresh = () => api.devices().then(setDevices).catch((err) => setError(err.message))
 
   useEffect(() => { refresh() }, [])
+
+  useEffect(() => {
+    if (!autoPairComputer) return
+    onAutoPairHandled?.()
+    startPairing({ kind: 'computer', name: '노트북 트래커', platform: 'Windows' })
+  }, [autoPairComputer])
 
   const startPairing = async (device: { kind: string; name: string; platform: string }) => {
     setError('')
@@ -1038,8 +1218,8 @@ function DevicesPage() {
     if (pendingDevice?.kind === 'computer') {
       return {
         title: '노트북 연결 코드',
-        description: '이 코드를 노트북 트래커 실행 명령에 넣으면 현재 로그인한 계정에 노트북이 연결됩니다.',
-        command: pairing ? `pnpm run tracker:windows -- -PairingToken ${pairing.token}` : '',
+        description: '아래 명령을 한 번 실행하면 현재 로그인한 계정에 연결되고 Windows 시작 시 자동 실행됩니다.',
+        command: pairing ? windowsTrackerCommand(pairing.token) : '',
       }
     }
     if (pendingDevice?.kind === 'phone') {
@@ -1060,6 +1240,31 @@ function DevicesPage() {
     <div style={{ padding: '32px 36px' }}>
       <div style={{ fontSize: 32, fontWeight: 900, color: C.white, letterSpacing: '-0.02em', marginBottom: 28 }}>연결된 기기</div>
       {error && <div style={{ color: C.mintMuted, fontSize: 12, marginBottom: 16 }}>{error}</div>}
+
+      <div style={{ background: 'linear-gradient(135deg, rgba(0,232,197,0.12), rgba(26,26,26,1) 42%, rgba(13,13,13,1))', borderRadius: 16, padding: '26px', border: `1px solid rgba(0,232,197,0.18)`, marginBottom: 18, display: 'grid', gridTemplateColumns: '1fr auto', gap: 24, alignItems: 'center' }}>
+        <div>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '5px 8px', borderRadius: 7, background: 'rgba(0,232,197,0.1)', border: `1px solid rgba(0,232,197,0.16)`, marginBottom: 12 }}>
+            <IcoDevice c={C.mint} />
+            <span style={{ fontSize: 10, color: C.mint, fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, letterSpacing: '0.08em' }}>HARUFIT DESKTOP</span>
+          </div>
+          <div style={{ fontSize: 24, fontWeight: 900, color: C.white, letterSpacing: '-0.03em', marginBottom: 8 }}>Windows 앱 설치</div>
+          <div style={{ fontSize: 12, color: C.alt, lineHeight: 1.8, maxWidth: 620 }}>
+            하루핏 PC 앱은 현재 보고 있는 앱과 창 제목을 자동 기록합니다. 설치 후 로그인만 하면 PC 시간, 앱 사용량, 개발 시간이 계정에 저장됩니다.
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
+            {['활성 앱 측정', '유휴 시간 제외', '백그라운드 동기화'].map((label) => (
+              <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 10px', borderRadius: 999, background: 'rgba(0,0,0,0.24)', border: `1px solid ${C.border}` }}>
+                <span style={{ width: 5, height: 5, borderRadius: 99, background: C.mint }} />
+                <span style={{ fontSize: 10, color: C.muted, fontWeight: 700 }}>{label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{ display: 'grid', gap: 10, minWidth: 210 }}>
+          <a href={windowsInstallerUrl()} style={{ textDecoration: 'none', textAlign: 'center', padding: '13px 20px', borderRadius: 999, background: C.mint, color: C.ink, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 13, fontWeight: 900, boxShadow: '0 16px 34px rgba(0,232,197,0.14)' }}>Windows 다운로드</a>
+          <button onClick={() => startPairing({ kind: 'computer', name: '노트북 트래커', platform: 'Windows' })} style={{ padding: '10px 18px', borderRadius: 999, border: `1px solid ${C.border2}`, background: 'rgba(0,0,0,0.18)', color: C.muted, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 11, fontWeight: 800, cursor: 'pointer' }}>명령어로 연결</button>
+        </div>
+      </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14, marginBottom: 32 }}>
         {connected.map((d) => (
@@ -1220,19 +1425,16 @@ function ResultPage() {
 
   const summaryData = data.rows.map((row) => row.focus_minutes / 60)
   const hasRows = data.rows.length > 0
-  const trackedMinutes = data.totals.pc_minutes + data.totals.phone_minutes + data.totals.focus_minutes + data.totals.development_minutes + data.totals.exercise_minutes
+  const trackedMinutes = data.totals.pc_minutes + data.totals.focus_minutes + data.totals.development_minutes
   const totalHours = Math.round(trackedMinutes / 60)
   const activityTotals = [
     { label: 'PC 사용', minutes: data.totals.pc_minutes, color: C.mint },
-    { label: '휴대폰 사용', minutes: data.totals.phone_minutes, color: C.faint },
     { label: '공부', minutes: data.totals.focus_minutes, color: C.mintBright },
     { label: '개발', minutes: data.totals.development_minutes, color: C.mint },
-    { label: '운동', minutes: data.totals.exercise_minutes, color: C.mintMuted },
   ]
   const maxActivityMinutes = Math.max(1, ...activityTotals.map((item) => item.minutes))
   const activityStats = [
     ...activityTotals.map((item) => ({ label: item.label, val: fmtMinutes(item.minutes), pct: Math.round((item.minutes / maxActivityMinutes) * 100), color: item.color })),
-    { label: '걸음', val: `${data.totals.steps.toLocaleString()}보`, pct: 0, color: C.white },
     { label: 'GitHub', val: `${data.totals.github_commits.toLocaleString()}커밋`, pct: 0, color: C.mint },
   ]
   const pct = (first: number, last: number, invert = false) => {
@@ -1240,11 +1442,9 @@ function ResultPage() {
     const good = invert ? delta <= 0 : delta >= 0
     return { delta: `${delta >= 0 ? '↑' : '↓'} ${Math.abs(delta)}%`, good }
   }
-  const phone = pct(data.first.phone_minutes, data.last.phone_minutes, true)
   const focus = pct(data.first.focus_minutes, data.last.focus_minutes)
   const dev = pct(data.first.development_minutes, data.last.development_minutes)
   const compare = [
-    { label: '휴대폰 사용량', d1: fmtMinutes(data.first.phone_minutes), d100: fmtMinutes(data.last.phone_minutes), ...phone },
     { label: '공부 시간', d1: fmtMinutes(data.first.focus_minutes), d100: fmtMinutes(data.last.focus_minutes), ...focus },
     { label: '개발 시간', d1: fmtMinutes(data.first.development_minutes), d100: fmtMinutes(data.last.development_minutes), ...dev },
   ]

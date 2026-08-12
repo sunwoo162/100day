@@ -2,8 +2,9 @@ param(
   [string]$ApiBase = "http://localhost:4000/api",
   [string]$PairingToken = "",
   [string]$ConfigPath = "$env:USERPROFILE\.harufit-tracker.json",
-  [int]$IntervalSeconds = 60,
-  [int]$IdleLimitSeconds = 180
+  [int]$IntervalSeconds = 15,
+  [int]$IdleLimitSeconds = 180,
+  [switch]$InstallStartup
 )
 
 $ErrorActionPreference = "Stop"
@@ -46,6 +47,17 @@ function Read-Config {
 
 function Save-Config($config) {
   $config | ConvertTo-Json -Depth 4 | Set-Content -Encoding UTF8 $ConfigPath
+}
+
+function Install-StartupTask {
+  $scriptPath = $PSCommandPath
+  $action = New-ScheduledTaskAction `
+    -Execute "powershell.exe" `
+    -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$scriptPath`" -ConfigPath `"$ConfigPath`" -ApiBase `"$ApiBase`" -IntervalSeconds $IntervalSeconds -IdleLimitSeconds $IdleLimitSeconds"
+  $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+  $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
+  Register-ScheduledTask -TaskName "Harufit PC Tracker" -Action $action -Trigger $trigger -Settings $settings -Force | Out-Null
+  Write-Host "Windows 시작 시 하루핏 PC 트래커가 자동 실행되도록 등록했습니다."
 }
 
 function Get-IdleSeconds {
@@ -105,6 +117,10 @@ if ($PairingToken) {
   }
   Save-Config $config
   Write-Host "하루핏 트래커 연결 완료: $($device.name)"
+}
+
+if ($InstallStartup) {
+  Install-StartupTask
 }
 
 if (-not $config.deviceToken) {
