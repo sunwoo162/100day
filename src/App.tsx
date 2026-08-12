@@ -485,9 +485,7 @@ function DashboardPage({ setPage, currentDay, onConnectDevice }: { setPage: (p: 
   ]
 
   const appTotals = new Map<string, { name: string; minutes: number }>()
-  data.apps
-    .filter((app) => !(desktopShell && app.source === 'browser'))
-    .forEach((app) => appTotals.set(app.name, { name: app.name, minutes: app.minutes }))
+  data.apps.forEach((app) => appTotals.set(app.name, { name: app.name, minutes: app.minutes }))
   if (!desktopShell) {
     const liveAppName = browserUsageName()
     const currentApp = appTotals.get(liveAppName)

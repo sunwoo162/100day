@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, session } = require('electron')
+const { app, BrowserWindow, Menu, Tray, shell, session } = require('electron')
 const { spawn } = require('node:child_process')
 const fs = require('node:fs')
 const path = require('node:path')
@@ -14,6 +14,9 @@ const children = new Set()
 let desktopTrackerProcess = null
 let authTrackerTimer = null
 let logDir = ''
+let mainWindow = null
+let tray = null
+let isQuitting = false
 
 function withDesktopFlag(url) {
   const parsed = new URL(url)
@@ -167,6 +170,43 @@ function startDesktopTrackerAfterLogin() {
   authTrackerTimer = setInterval(check, 2000)
 }
 
+function showMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow()
+    return
+  }
+  mainWindow.show()
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.focus()
+}
+
+function createTray() {
+  if (tray || !isWindows) return
+  tray = new Tray(iconPath)
+  tray.setToolTip('하루핏 - 백그라운드 측정 중')
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: '하루핏 열기', click: showMainWindow },
+    { type: 'separator' },
+    {
+      label: '종료',
+      click: () => {
+        isQuitting = true
+        app.quit()
+      },
+    },
+  ]))
+  tray.on('click', showMainWindow)
+}
+
+function enableAutoLaunch() {
+  if (!isWindows || !app.isPackaged) return
+  app.setLoginItemSettings({
+    openAtLogin: true,
+    openAsHidden: true,
+    path: process.execPath,
+  })
+}
+
 async function loadWhenReady(win, url, attempts = 30) {
   for (let i = 0; i < attempts; i += 1) {
     try {
@@ -180,7 +220,7 @@ async function loadWhenReady(win, url, attempts = 30) {
 }
 
 function createWindow() {
-  const win = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1280,
     height: 820,
     minWidth: 960,
@@ -195,21 +235,33 @@ function createWindow() {
     },
   })
 
-  win.webContents.setWindowOpenHandler(({ url }) => {
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url)
     return { action: 'deny' }
   })
 
-  win.webContents.on('did-navigate', () => {
+  mainWindow.webContents.on('did-navigate', () => {
     startDesktopTrackerAfterLogin()
   })
 
-  loadWhenReady(win, withDesktopFlag(baseAppUrl))
+  mainWindow.on('close', (event) => {
+    if (isQuitting) return
+    event.preventDefault()
+    mainWindow.hide()
+  })
+
+  mainWindow.on('closed', () => {
+    mainWindow = null
+  })
+
+  loadWhenReady(mainWindow, withDesktopFlag(baseAppUrl))
 }
 
 app.whenReady().then(() => {
+  enableAutoLaunch()
   startApiServer()
   startDesktopTrackerAfterLogin()
+  createTray()
   createWindow()
 
   app.on('activate', () => {
@@ -218,10 +270,11 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit()
+  if (process.platform === 'darwin') return
 })
 
 app.on('before-quit', () => {
+  isQuitting = true
   if (authTrackerTimer) clearInterval(authTrackerTimer)
   if (desktopTrackerProcess && !desktopTrackerProcess.killed) desktopTrackerProcess.kill()
   for (const child of children) {
