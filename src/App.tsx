@@ -211,7 +211,6 @@ function PublicDownloadPage() {
             </p>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 28 }}>
               <a href={windowsInstallerUrl()} style={{ textDecoration: 'none', padding: '14px 22px', borderRadius: 999, background: C.mint, color: C.ink, fontSize: 14, fontWeight: 950, boxShadow: '0 18px 42px rgba(0,232,197,0.16)' }}>Windows 앱 다운로드</a>
-              <div style={{ padding: '14px 16px', borderRadius: 999, border: `1px solid ${C.border2}`, color: C.alt, fontSize: 12, fontWeight: 800 }}>로그인은 앱에서 진행</div>
             </div>
           </section>
 
