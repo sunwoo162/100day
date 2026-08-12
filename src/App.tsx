@@ -770,15 +770,12 @@ function TimelinePage({ currentDay }: { currentDay: number }) {
   const d = rows.find((row) => row.day_number === sel) ?? rows[0]
   const rowByDay = new Map(rows.map((row) => [row.day_number, row]))
   const usageMinutes = (row?: TimelineEntry) => row ? row.pc_minutes + row.phone_minutes + row.focus_minutes + row.development_minutes + row.exercise_minutes : 0
-  const maxUsageMinutes = Math.max(1, ...rows.map((row) => usageMinutes(row)))
-  const heatColor = (minutes: number, future: boolean, today: boolean, selected: boolean) => {
+  const heatColor = (minutes: number, future: boolean) => {
     if (future) return '#111'
     if (minutes <= 0) return '#141414'
-    const ratio = minutes / maxUsageMinutes
-    if (today) return C.mint
-    if (ratio >= 0.75) return '#00e8c5'
-    if (ratio >= 0.5) return '#00bfa5'
-    if (ratio >= 0.25) return '#087d70'
+    if (minutes >= 360) return C.mint
+    if (minutes >= 240) return '#00bfa5'
+    if (minutes >= 120) return '#087d70'
     return '#15524d'
   }
   if (error) return <ErrorBlock message={error} />
@@ -808,7 +805,7 @@ function TimelinePage({ currentDay }: { currentDay: number }) {
                 <button key={n} onClick={() => !future && setSel(n)} style={{
                   aspectRatio: '1', borderRadius: 6, border: 'none',
                   cursor: future ? 'default' : 'pointer',
-                  background: heatColor(minutes, future, today, selected),
+                  background: heatColor(minutes, future),
                   color: future ? '#4a4a4a' : minutes > 0 && today ? C.ink : minutes > 0 ? C.white : C.faint,
                   fontSize: 11, fontFamily: "'JetBrains Mono', monospace",
                   fontWeight: today ? 700 : 400,
@@ -825,7 +822,7 @@ function TimelinePage({ currentDay }: { currentDay: number }) {
           </div>
           {/* legend */}
           <div style={{ display: 'flex', gap: 14, marginTop: 16, flexWrap: 'wrap' }}>
-            {[{ col: '#141414', lbl: '기록 없음' }, { col: '#15524d', lbl: '적음' }, { col: '#087d70', lbl: '보통' }, { col: '#00bfa5', lbl: '많음' }, { col: C.mint, lbl: '최대/오늘' }].map(l => (
+            {[{ col: '#141414', lbl: '기록 없음' }, { col: '#15524d', lbl: '2시간 미만' }, { col: '#087d70', lbl: '2~4시간' }, { col: '#00bfa5', lbl: '4~6시간' }, { col: C.mint, lbl: '6시간 이상' }].map(l => (
               <div key={l.lbl} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <div style={{ width: 8, height: 8, borderRadius: 2, background: l.col }} />
                 <span style={{ fontSize: 10, color: C.alt }}>{l.lbl}</span>
