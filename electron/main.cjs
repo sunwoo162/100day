@@ -1,17 +1,17 @@
 const { app, BrowserWindow, shell, session } = require('electron')
-const { execFile, spawn } = require('node:child_process')
-const fs = require('node:fs')
+const { spawn } = require('node:child_process')
 const path = require('node:path')
-const os = require('node:os')
 
 const appRootDir = path.resolve(__dirname, '..')
 const rootDir = app.isPackaged ? path.join(process.resourcesPath, 'app') : appRootDir
+const iconPath = path.join(rootDir, 'assets', 'icon.ico')
 const isWindows = process.platform === 'win32'
 const devServerUrl = process.env.HARUFIT_DESKTOP_DEV_SERVER_URL || ''
 const appUrl = devServerUrl || 'http://localhost:4000'
 const apiBaseUrl = 'http://localhost:4000/api'
 const children = new Set()
-let desktopTrackerTimer = null
+let desktopTrackerProcess = null
+let authTrackerTimer = null
 
 function spawnChild(command, args, options = {}) {
   const child = spawn(command, args, {
@@ -30,46 +30,11 @@ function startApiServer() {
   const serverPath = path.join(rootDir, 'server', 'index.mjs')
   spawnChild(process.execPath, [serverPath], {
     env: {
+      ELECTRON_RUN_AS_NODE: '1',
       API_PORT: process.env.API_PORT || '4000',
       WEB_ORIGIN: devServerUrl || 'http://localhost:4000',
       API_ORIGIN: process.env.API_ORIGIN || 'http://localhost:4000',
     },
-  })
-}
-
-function startWindowsTrackerIfConfigured() {
-  if (!isWindows) return
-  const configPath = path.join(os.homedir(), '.harufit-tracker.json')
-  const trackerPath = path.join(rootDir, 'scripts', 'windows-pc-tracker.ps1')
-  if (!fs.existsSync(configPath) || !fs.existsSync(trackerPath)) return
-  spawnChild('powershell.exe', [
-    '-NoProfile',
-    '-ExecutionPolicy',
-    'Bypass',
-    '-File',
-    trackerPath,
-    '-ConfigPath',
-    configPath,
-    '-ApiBase',
-    'http://localhost:4000/api',
-  ])
-}
-
-function readActiveWindowsApp() {
-  const scriptPath = path.join(rootDir, 'scripts', 'windows-active-app.ps1')
-  return new Promise((resolve, reject) => {
-    execFile('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath], {
-      cwd: rootDir,
-      windowsHide: true,
-      timeout: 10000,
-    }, (error, stdout) => {
-      if (error) return reject(error)
-      try {
-        resolve(JSON.parse(String(stdout || '{}')))
-      } catch (parseError) {
-        reject(parseError)
-      }
-    })
   })
 }
 
@@ -97,18 +62,59 @@ async function sendDesktopUsage(appName, minutes) {
 }
 
 function startDesktopTracker() {
-  if (!isWindows || desktopTrackerTimer) return
-  const intervalSeconds = 15
+  if (!isWindows || desktopTrackerProcess) return
+  const intervalSeconds = 30
   const idleLimitSeconds = 180
-  desktopTrackerTimer = setInterval(async () => {
-    try {
-      const active = await readActiveWindowsApp()
-      if (!active?.appName || Number(active.idleSeconds || 0) >= idleLimitSeconds) return
-      await sendDesktopUsage(String(active.appName).slice(0, 160), intervalSeconds / 60)
-    } catch {
-      // Tracking should never interrupt the desktop shell.
+  const scriptPath = path.join(rootDir, 'scripts', 'windows-active-app-watch.ps1')
+  desktopTrackerProcess = spawnChild('powershell.exe', [
+    '-NoProfile',
+    '-ExecutionPolicy',
+    'Bypass',
+    '-File',
+    scriptPath,
+    '-IntervalSeconds',
+    String(intervalSeconds),
+    '-IdleLimitSeconds',
+    String(idleLimitSeconds),
+  ], { stdio: ['ignore', 'pipe', 'ignore'] })
+
+  let buffer = ''
+  desktopTrackerProcess.stdout.on('data', chunk => {
+    buffer += chunk.toString('utf8')
+    const lines = buffer.split(/\r?\n/)
+    buffer = lines.pop() || ''
+    for (const line of lines) {
+      if (!line.trim()) continue
+      try {
+        const active = JSON.parse(line)
+        if (!active?.active || !active?.appName) continue
+        sendDesktopUsage(String(active.appName).slice(0, 160), Number(active.intervalSeconds || intervalSeconds) / 60)
+      } catch {
+        // Tracking should never interrupt the desktop shell.
+      }
     }
-  }, intervalSeconds * 1000)
+  })
+
+  desktopTrackerProcess.on('exit', () => {
+    desktopTrackerProcess = null
+  })
+}
+
+function stopDesktopTracker() {
+  if (!desktopTrackerProcess || desktopTrackerProcess.killed) return
+  desktopTrackerProcess.kill()
+  desktopTrackerProcess = null
+}
+
+function startDesktopTrackerAfterLogin() {
+  if (!isWindows || authTrackerTimer) return
+  const check = async () => {
+    const cookie = await sessionCookieHeader()
+    if (cookie) startDesktopTracker()
+    else stopDesktopTracker()
+  }
+  check()
+  authTrackerTimer = setInterval(check, 10000)
 }
 
 async function loadWhenReady(win, url, attempts = 30) {
@@ -130,6 +136,7 @@ function createWindow() {
     minWidth: 960,
     minHeight: 640,
     title: '하루핏',
+    icon: iconPath,
     backgroundColor: '#0d0d0d',
     autoHideMenuBar: true,
     webPreferences: {
@@ -148,8 +155,7 @@ function createWindow() {
 
 app.whenReady().then(() => {
   startApiServer()
-  startWindowsTrackerIfConfigured()
-  startDesktopTracker()
+  startDesktopTrackerAfterLogin()
   createWindow()
 
   app.on('activate', () => {
@@ -162,7 +168,8 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
-  if (desktopTrackerTimer) clearInterval(desktopTrackerTimer)
+  if (authTrackerTimer) clearInterval(authTrackerTimer)
+  if (desktopTrackerProcess && !desktopTrackerProcess.killed) desktopTrackerProcess.kill()
   for (const child of children) {
     if (!child.killed) child.kill()
   }

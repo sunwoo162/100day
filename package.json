@@ -43,9 +43,11 @@
     "asar": false,
     "files": [
       "dist/**/*",
+      "assets/**/*",
       "electron/**/*",
       "server/**/*",
       "scripts/windows-active-app.ps1",
+      "scripts/windows-active-app-watch.ps1",
       "scripts/windows-pc-tracker.ps1",
       "package.json",
       "!server/data/*.db",
@@ -53,6 +55,7 @@
       "!**/*.map"
     ],
     "win": {
+      "icon": "assets/icon.ico",
       "target": [
         {
           "target": "nsis",
@@ -63,6 +66,9 @@
       ]
     },
     "nsis": {
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "installerHeaderIcon": "assets/icon.ico",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
