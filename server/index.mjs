@@ -160,15 +160,23 @@ function isDevelopmentApp(appName) {
 function normalizeDesktopAppName(appName) {
   return String(appName || 'Unknown').split(' - ')[0].trim().slice(0, 80) || 'Unknown'
 }
+function appClassifications(userId) {
+  return db.prepare('SELECT app_name AS name, category FROM app_classifications WHERE user_id = ? ORDER BY app_name').all(userId)
+}
+function appCategory(userId, appName) {
+  return db.prepare('SELECT category FROM app_classifications WHERE user_id = ? AND app_name = ? ORDER BY category LIMIT 1').get(userId, appName)?.category || ''
+}
 function recordPcUsage(userId, source, appName, minutes, occurredAt = new Date()) {
   const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(occurredAt)
   const challenge = getUserChallenge(userId)
   const day = dayForDate(challenge, date)
   ensureMetric(userId, challenge, day)
   const normalizedAppName = source === 'desktop' ? normalizeDesktopAppName(appName) : appName
-  const devMinutes = isDevelopmentApp(normalizedAppName) ? minutes : 0
-  db.prepare('UPDATE daily_metrics SET pc_minutes = pc_minutes + ?, development_minutes = development_minutes + ? WHERE user_id = ? AND challenge_id = ? AND day_number = ?')
-    .run(minutes, devMinutes, userId, challenge.id, day)
+  const category = appCategory(userId, normalizedAppName)
+  const focusMinutes = category === 'focus' ? minutes : 0
+  const devMinutes = category === 'development' || (!category && isDevelopmentApp(normalizedAppName)) ? minutes : 0
+  db.prepare('UPDATE daily_metrics SET pc_minutes = pc_minutes + ?, focus_minutes = focus_minutes + ?, development_minutes = development_minutes + ? WHERE user_id = ? AND challenge_id = ? AND day_number = ?')
+    .run(minutes, focusMinutes, devMinutes, userId, challenge.id, day)
   db.prepare('INSERT INTO app_usage (user_id, day_number, source, app_name, minutes) VALUES (?, ?, ?, ?, ?)')
     .run(userId, day, source, normalizedAppName, minutes)
   return { day_number: day, minutes }
@@ -187,7 +195,8 @@ function clearSessionCookie() {
 }
 function publicUser(user) {
   if (!user) return null
-  return { id: user.id, email: user.email, name: user.name, avatarUrl: user.avatar_url }
+  const providers = db.prepare('SELECT provider FROM oauth_accounts WHERE user_id = ? ORDER BY provider').all(user.id).map(row => row.provider)
+  return { id: user.id, email: user.email, name: user.name, avatarUrl: user.avatar_url, providers }
 }
 function currentUser(req) {
   const token = parseCookies(req)[SESSION_COOKIE]
@@ -445,8 +454,33 @@ const server = http.createServer(async (req, res) => {
           exercise: { minutes: metric.exercise_minutes, delta: metric.exercise_minutes - prev.exercise_minutes },
           development: { minutes: metric.development_minutes, display: formatMinutes(metric.development_minutes), delta: metric.development_minutes - prev.development_minutes },
           github: { commits: metric.github_commits, delta: metric.github_commits - prev.github_commits }
-        }, apps, events, recent
+        }, apps, appClassifications: appClassifications(user.id), events, recent
       })
+    }
+
+    if (url.pathname === '/api/app-classifications' && req.method === 'GET') {
+      const user = requireUser(req, res); if (!user) return
+      return json(res, 200, appClassifications(user.id))
+    }
+
+    if (url.pathname === '/api/app-classifications' && req.method === 'POST') {
+      const user = requireUser(req, res); if (!user) return
+      const body = await readBody(req)
+      const appName = String(body.app_name || '').trim().slice(0, 120)
+      const category = String(body.category || '').trim()
+      if (!appName || !['focus', 'development'].includes(category)) return json(res, 400, { error: '앱 이름과 분류가 필요합니다' })
+      db.prepare('INSERT OR IGNORE INTO app_classifications (user_id, app_name, category, created_at) VALUES (?, ?, ?, ?)')
+        .run(user.id, appName, category, new Date().toISOString())
+      return json(res, 201, { name: appName, category })
+    }
+
+    const deleteClassification = url.pathname.match(/^\/api\/app-classifications\/([^/]+)\/(focus|development)$/)
+    if (deleteClassification && req.method === 'DELETE') {
+      const user = requireUser(req, res); if (!user) return
+      db.prepare('DELETE FROM app_classifications WHERE user_id = ? AND app_name = ? AND category = ?')
+        .run(user.id, decodeURIComponent(deleteClassification[1]), deleteClassification[2])
+      res.writeHead(204, { 'Access-Control-Allow-Origin': WEB_ORIGIN, 'Access-Control-Allow-Credentials': 'true' })
+      return res.end()
     }
 
     if (url.pathname === '/api/timeline') {

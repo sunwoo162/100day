@@ -13,6 +13,7 @@ export type DashboardData = {
   date: string
   metrics: Record<'pc' | 'phone' | 'focus' | 'steps' | 'exercise' | 'development' | 'github', DashboardMetric>
   apps: { name: string; source: string; minutes: number }[]
+  appClassifications: AppClassification[]
   events: { time: string; label: string; type: string }[]
   recent: TimelineEntry[]
 }
@@ -60,6 +61,7 @@ export type AuthUser = {
   email: string | null
   name: string
   avatarUrl: string | null
+  providers: string[]
 }
 
 export type DevicePairingData = {
@@ -80,6 +82,11 @@ export type FocusSession = {
 export type StudyCategory = {
   id: number
   name: string
+}
+
+export type AppClassification = {
+  name: string
+  category: 'focus' | 'development'
 }
 
 export type ResultData = {
@@ -122,6 +129,9 @@ export const api = {
   connectDevice: (data: { token: string }) => request<DeviceData>('/devices/connect', { method: 'POST', body: JSON.stringify(data) }),
   disconnectDevice: (id: number) => request<void>(`/devices/${id}`, { method: 'DELETE' }),
   trackBrowser: (data: { minutes: number; app_name: string }) => request<{ ok: boolean }>('/track/browser', { method: 'POST', body: JSON.stringify(data) }),
+  appClassifications: () => request<AppClassification[]>('/app-classifications'),
+  addAppClassification: (data: { app_name: string; category: 'focus' | 'development' }) => request<AppClassification>('/app-classifications', { method: 'POST', body: JSON.stringify(data) }),
+  deleteAppClassification: (appName: string, category: 'focus' | 'development') => request<void>(`/app-classifications/${encodeURIComponent(appName)}/${category}`, { method: 'DELETE' }),
   studyCategories: () => request<StudyCategory[]>('/study/categories'),
   addStudyCategory: (data: { name: string }) => request<StudyCategory>('/study/categories', { method: 'POST', body: JSON.stringify(data) }),
   focusSessions: (day = 37) => request<FocusSession[]>(`/focus/sessions?day=${day}`),

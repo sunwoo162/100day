@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { api, type AnalyticsData, type AuthUser, type ChallengeData, type DashboardData, type DeviceData, type DevicePairingData, type FocusSession, type ResultData, type StudyCategory, type TimelineEntry } from './lib/api'
+import { api, type AnalyticsData, type AppClassification, type AuthUser, type ChallengeData, type DashboardData, type DeviceData, type DevicePairingData, type FocusSession, type ResultData, type StudyCategory, type TimelineEntry } from './lib/api'
 
 type Page = 'dashboard' | 'timeline' | 'analytics' | 'focus' | 'devices' | 'result'
 
@@ -323,7 +323,7 @@ export default function App() {
       <Sidebar page={page} setPage={navigatePage} open={menuOpen} setOpen={setMenuOpen} currentDay={currentDay} user={user} onLogout={logout} />
       <main style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }} className="scrollbar-none">
         <MobileTopbar page={page} onMenu={() => setMenuOpen(true)} />
-        {page === 'dashboard' && <DashboardPage setPage={navigatePage} currentDay={currentDay} onConnectDevice={() => { setAutoPairComputer(true); navigatePage('devices') }} />}
+        {page === 'dashboard' && <DashboardPage user={user} setPage={navigatePage} currentDay={currentDay} onConnectDevice={() => { setAutoPairComputer(true); navigatePage('devices') }} />}
         {page === 'timeline'  && <TimelinePage currentDay={currentDay} />}
         {page === 'analytics' && <AnalyticsPage />}
         {page === 'focus'     && <FocusPage currentDay={currentDay} />}
@@ -422,9 +422,10 @@ function MobileTopbar({ page, onMenu }: { page: Page; onMenu: () => void }) {
 /* ═══════════════════════════════════════════════
    DASHBOARD
 ═══════════════════════════════════════════════ */
-function DashboardPage({ setPage, currentDay, onConnectDevice }: { setPage: (p: Page) => void; currentDay: number; onConnectDevice: () => void }) {
+function DashboardPage({ user, setPage, currentDay, onConnectDevice }: { user: AuthUser; setPage: (p: Page) => void; currentDay: number; onConnectDevice: () => void }) {
   const [data, setData] = useState<DashboardData | null>(null)
   const [error, setError] = useState('')
+  const [appPicker, setAppPicker] = useState<'focus' | 'development' | null>(null)
   const [now, setNow] = useState(() => Date.now())
   const liveStartRef = useRef(Date.now())
   const lastPcMinutesRef = useRef<number | null>(null)
@@ -450,6 +451,18 @@ function DashboardPage({ setPage, currentDay, onConnectDevice }: { setPage: (p: 
       window.clearInterval(interval)
     }
   }, [currentDay])
+
+  const reloadDashboard = () => api.dashboard(currentDay).then(setData).catch((err) => setError(err.message))
+
+  const addClassification = async (appName: string, category: 'focus' | 'development') => {
+    await api.addAppClassification({ app_name: appName, category })
+    await reloadDashboard()
+  }
+
+  const removeClassification = async (item: AppClassification) => {
+    await api.deleteAppClassification(item.name, item.category)
+    await reloadDashboard()
+  }
 
   useEffect(() => {
     const interval = window.setInterval(() => setNow(Date.now()), 1000)
@@ -477,9 +490,9 @@ function DashboardPage({ setPage, currentDay, onConnectDevice }: { setPage: (p: 
   }
   const stats = [
     { id: 'pc', label: 'PC', value: fmtMinutes(pcDisplayMinutes), sub: fmtDelta(m.pc.delta), up: m.pc.delta >= 0, spark: spark.pc, max: 10, color: C.mint },
-    { id: 'focus', label: '공부', value: parseHourValue(m.focus.display || '0h 00m'), sub: fmtDelta(m.focus.delta), up: m.focus.delta >= 0, spark: spark.focus, max: 5, color: C.mint },
-    { id: 'dev', label: '개발', value: fmtMinutes(developmentDisplayMinutes), sub: fmtDelta(m.development.delta), up: m.development.delta >= 0, spark: spark.development, max: 5, color: C.mintBright },
-    { id: 'git', label: 'GitHub', value: `커밋 ${m.github.commits || 0}개`, sub: fmtDelta(m.github.delta, ''), up: m.github.delta >= 0, spark: spark.github, max: 12, color: C.mint },
+    { id: 'focus', label: '공부', value: parseHourValue(m.focus.display || '0h 00m'), sub: fmtDelta(m.focus.delta), up: m.focus.delta >= 0, spark: spark.focus, max: 5, color: C.mint, action: '앱 등록하기' },
+    { id: 'dev', label: '개발', value: fmtMinutes(developmentDisplayMinutes), sub: fmtDelta(m.development.delta), up: m.development.delta >= 0, spark: spark.development, max: 5, color: C.mintBright, action: '앱 등록하기' },
+    { id: 'git', label: 'GitHub', value: `커밋 ${m.github.commits || 0}개`, sub: fmtDelta(m.github.delta, ''), up: m.github.delta >= 0, spark: spark.github, max: 12, color: C.mint, action: user.providers?.includes('github') ? '' : '연결하기' },
   ]
 
   const appTotals = new Map<string, { name: string; minutes: number }>()
@@ -538,7 +551,14 @@ function DashboardPage({ setPage, currentDay, onConnectDevice }: { setPage: (p: 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 28 }}>
         {stats.map((s) => (
           <div key={s.id} style={{ background: C.raised, borderRadius: 14, padding: '18px 18px 14px', border: `1px solid ${C.border}` }}>
-            <div style={{ fontSize: 11, color: C.soft, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 10, fontWeight: 700 }}>{s.label.toUpperCase()}</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+              <div style={{ fontSize: 11, color: C.soft, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', fontWeight: 700 }}>{s.label.toUpperCase()}</div>
+              {s.action && (
+                <button onClick={() => s.id === 'git' ? (window.location.href = '/api/auth/github') : setAppPicker(s.id === 'focus' ? 'focus' : 'development')} style={{ border: `1px solid ${C.border2}`, background: 'rgba(0,232,197,0.08)', color: C.mint, borderRadius: 999, padding: '5px 8px', fontSize: 10, fontWeight: 800, cursor: 'pointer', fontFamily: "'Pretendard', system-ui, sans-serif", whiteSpace: 'nowrap' }}>
+                  {s.action}
+                </button>
+              )}
+            </div>
             <div style={{ fontSize: 22, fontWeight: 800, color: C.white, letterSpacing: '-0.02em', marginBottom: 4, lineHeight: 1 }}>{s.value}</div>
             <div style={{ fontSize: 10, color: s.up ? C.mintMuted : C.faint, marginBottom: 12 }}>{s.sub}</div>
             {hasRecent ? <Sparkline data={s.spark} color={s.color} max={s.max} /> : <EmptyChart height={28} />}
@@ -611,6 +631,94 @@ function DashboardPage({ setPage, currentDay, onConnectDevice }: { setPage: (p: 
         <button onClick={() => setPage('focus')} style={{ padding: '9px 20px', borderRadius: 50, background: C.mint, color: C.ink, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, fontWeight: 700, border: 'none', cursor: 'pointer', letterSpacing: '0.04em' }}>
           Start →
         </button>
+      </div>
+      {appPicker && data && (
+        <AppPickerModal
+          category={appPicker}
+          apps={appRows}
+          selected={data.appClassifications.filter(item => item.category === appPicker)}
+          onAdd={(appName) => addClassification(appName, appPicker)}
+          onRemove={removeClassification}
+          onClose={() => setAppPicker(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+function AppPickerModal({
+  category,
+  apps,
+  selected,
+  onAdd,
+  onRemove,
+  onClose,
+}: {
+  category: 'focus' | 'development'
+  apps: { name: string; minutes: number }[]
+  selected: AppClassification[]
+  onAdd: (appName: string) => Promise<void>
+  onRemove: (item: AppClassification) => Promise<void>
+  onClose: () => void
+}) {
+  const [customName, setCustomName] = useState('')
+  const [saving, setSaving] = useState('')
+  const selectedNames = new Set(selected.map(item => item.name))
+  const title = category === 'development' ? '개발 앱 등록' : '공부 앱 등록'
+  const available = apps.filter(app => !selectedNames.has(app.name))
+
+  const add = async (name: string) => {
+    const appName = name.trim()
+    if (!appName || saving) return
+    setSaving(appName)
+    try {
+      await onAdd(appName)
+      setCustomName('')
+    } finally {
+      setSaving('')
+    }
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.68)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 24 }} onClick={onClose}>
+      <div style={{ width: 'min(520px, 100%)', maxHeight: '82vh', overflow: 'auto', background: C.raised, border: `1px solid ${C.border2}`, borderRadius: 14, padding: 22, boxShadow: '0 30px 90px rgba(0,0,0,0.42)' }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, marginBottom: 18 }}>
+          <div>
+            <div style={{ color: C.white, fontSize: 18, fontWeight: 900 }}>{title}</div>
+            <div style={{ color: C.alt, fontSize: 11, marginTop: 5 }}>선택한 앱 사용 시간이 {category === 'development' ? '개발' : '공부'} 시간에 더해집니다.</div>
+          </div>
+          <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: 10, border: `1px solid ${C.border2}`, background: C.surface, color: C.muted, cursor: 'pointer', fontSize: 18 }}>×</button>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
+          <input value={customName} onChange={e => setCustomName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') add(customName) }} placeholder="앱 이름 직접 입력: chrome, Code, Discord" style={{ flex: 1, background: C.surface, border: `1px solid ${C.border2}`, borderRadius: 9, color: C.white, padding: '11px 12px', outline: 'none', fontSize: 12 }} />
+          <button onClick={() => add(customName)} style={{ border: 'none', background: C.mint, color: C.ink, borderRadius: 9, padding: '0 14px', fontWeight: 900, cursor: 'pointer' }}>추가</button>
+        </div>
+
+        {selected.length > 0 && (
+          <div style={{ marginBottom: 18 }}>
+            <div style={{ color: C.soft, fontSize: 11, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 8 }}>등록됨</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+              {selected.map(item => (
+                <button key={item.name} onClick={() => onRemove(item)} style={{ border: `1px solid rgba(0,232,197,0.28)`, background: 'rgba(0,232,197,0.1)', color: C.mint, borderRadius: 999, padding: '7px 10px', cursor: 'pointer', fontSize: 11, fontWeight: 800 }}>
+                  {item.name} ×
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div style={{ color: C.soft, fontSize: 11, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 8 }}>오늘 사용한 앱</div>
+        <div style={{ display: 'grid', gap: 7 }}>
+          {available.length > 0 ? available.map(app => (
+            <button key={app.name} onClick={() => add(app.name)} disabled={saving === app.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: `1px solid ${C.border}`, background: C.surface, color: C.muted, borderRadius: 9, padding: '10px 12px', cursor: 'pointer', textAlign: 'left' }}>
+              <span style={{ color: C.white, fontSize: 12, fontWeight: 800 }}>{app.name}</span>
+              <span style={{ color: C.alt, fontFamily: "'JetBrains Mono', monospace", fontSize: 10 }}>{fmtMinutes(app.minutes)}</span>
+            </button>
+          )) : (
+            <div style={{ color: C.alt, fontSize: 12, padding: '16px 4px' }}>아직 선택할 앱 기록이 없습니다.</div>
+          )}
+        </div>
       </div>
     </div>
   )

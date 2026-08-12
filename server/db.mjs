@@ -85,6 +85,15 @@ CREATE TABLE IF NOT EXISTS app_usage (
   minutes INTEGER NOT NULL DEFAULT 0,
   FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+CREATE TABLE IF NOT EXISTS app_classifications (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  app_name TEXT NOT NULL,
+  category TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE(user_id, app_name, category),
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+);
 CREATE TABLE IF NOT EXISTS timeline_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER,
@@ -143,6 +152,7 @@ for (const [table, definition] of [
   ['challenges', 'user_id INTEGER'],
   ['daily_metrics', 'user_id INTEGER'],
   ['app_usage', 'user_id INTEGER'],
+  ['app_classifications', 'user_id INTEGER'],
   ['timeline_events', 'user_id INTEGER'],
   ['devices', 'user_id INTEGER'],
   ['focus_sessions', 'user_id INTEGER'],
