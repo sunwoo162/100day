@@ -1046,10 +1046,6 @@ function FocusPage({ currentDay }: { currentDay: number }) {
               />
               <button onClick={addCategory} style={{ padding: '0 14px', borderRadius: 8, border: 'none', background: C.chip, color: C.mint, cursor: 'pointer', fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12 }}>추가</button>
             </div>
-            <input value={note} onChange={e => setNote(e.target.value)}
-              placeholder="노트북/휴대폰 없이 하는 일을 적어두기"
-              style={{ width: '100%', marginTop: 10, padding: '10px 12px', background: C.raised, border: `1px solid ${C.border2}`, borderRadius: 8, color: C.white, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, outline: 'none' }}
-            />
           </div>
         )}
 

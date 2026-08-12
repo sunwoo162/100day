@@ -33,7 +33,7 @@ loadEnvFile(path.join(process.cwd(), '.env'))
 const PORT = Number(process.env.API_PORT || 4000)
 const WEB_ORIGIN = process.env.WEB_ORIGIN || 'http://localhost:5173'
 const API_ORIGIN = process.env.API_ORIGIN || `http://localhost:${PORT}`
-const WINDOWS_INSTALLER_PATH = process.env.HARUFIT_WINDOWS_INSTALLER_PATH || path.join(rootDir, 'desktop-release', '하루핏 Setup 0.1.1.exe')
+const WINDOWS_INSTALLER_PATH = process.env.HARUFIT_WINDOWS_INSTALLER_PATH || path.join(rootDir, 'desktop-release', latestWindowsInstallerName())
 const SESSION_COOKIE = 'sid'
 const SESSION_DAYS = 30
 
@@ -86,6 +86,15 @@ function downloadFile(res, filePath, filename, contentType = 'application/octet-
     'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
   })
   return fs.createReadStream(filePath).pipe(res)
+}
+function latestWindowsInstallerName() {
+  const releaseDir = path.join(rootDir, 'desktop-release')
+  if (!fs.existsSync(releaseDir)) return '하루핏 Setup 0.1.2.exe'
+  const installers = fs.readdirSync(releaseDir)
+    .filter(name => /^하루핏 Setup .*\.exe$/.test(name))
+    .map(name => ({ name, time: fs.statSync(path.join(releaseDir, name)).mtimeMs }))
+    .sort((a, b) => b.time - a.time)
+  return installers[0]?.name || '하루핏 Setup 0.1.2.exe'
 }
 function serveStatic(req, res, url) {
   if (!['GET', 'HEAD'].includes(req.method || '')) return json(res, 405, { error: '허용되지 않는 메서드입니다' })
@@ -349,7 +358,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (url.pathname === '/downloads/harufit-windows' && req.method === 'GET') {
-      return downloadFile(res, WINDOWS_INSTALLER_PATH, '하루핏 Setup 0.1.1.exe')
+      return downloadFile(res, WINDOWS_INSTALLER_PATH, path.basename(WINDOWS_INSTALLER_PATH))
     }
 
     if (url.pathname === '/api/auth/me') return json(res, 200, { user: publicUser(currentUser(req)) })
