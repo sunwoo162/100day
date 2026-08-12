@@ -88,6 +88,29 @@ async function sessionCookieHeader() {
   return cookies.map(cookie => `${cookie.name}=${cookie.value}`).join('; ')
 }
 
+async function migrateLegacySessionCookie() {
+  const targetSession = session.fromPartition(desktopSessionPartition)
+  const existing = await targetSession.cookies.get({ url: 'http://localhost:4000', name: 'sid' })
+  if (existing.length) return
+
+  const legacy = await session.defaultSession.cookies.get({ url: 'http://localhost:4000', name: 'sid' })
+  if (!legacy.length) return
+
+  const cookie = legacy[0]
+  await targetSession.cookies.set({
+    url: 'http://localhost:4000',
+    name: cookie.name,
+    value: cookie.value,
+    path: cookie.path || '/',
+    httpOnly: cookie.httpOnly,
+    secure: cookie.secure,
+    sameSite: cookie.sameSite,
+    expirationDate: cookie.expirationDate,
+  })
+  await targetSession.cookies.flushStore()
+  logDesktop('migrated legacy session cookie')
+}
+
 async function sendDesktopUsage(appName, minutes) {
   const cookie = await sessionCookieHeader()
   if (!cookie) {
@@ -261,9 +284,10 @@ function createWindow() {
   loadWhenReady(mainWindow, withDesktopFlag(baseAppUrl))
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   enableAutoLaunch()
   startApiServer()
+  await migrateLegacySessionCookie()
   startDesktopTrackerAfterLogin()
   createTray()
   createWindow()
