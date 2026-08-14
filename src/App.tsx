@@ -183,6 +183,10 @@ function LoginPage() {
 }
 
 function PublicDownloadPage() {
+  const login = (provider: 'github' | 'google') => {
+    window.location.href = `/api/auth/${provider}`
+  }
+
   return (
     <div style={{ minHeight: '100vh', background: C.canvas, color: C.white, fontFamily: "'Pretendard', system-ui, sans-serif", overflow: 'hidden' }}>
       <div style={{ minHeight: '100vh', display: 'grid', gridTemplateRows: 'auto 1fr', padding: '24px clamp(20px, 5vw, 56px)' }}>
@@ -194,7 +198,10 @@ function PublicDownloadPage() {
               <div style={{ fontSize: 10, color: C.alt, fontFamily: "'JetBrains Mono', monospace" }}>desktop activity tracker</div>
             </div>
           </div>
-          <a href={windowsInstallerUrl()} style={{ textDecoration: 'none', padding: '10px 16px', borderRadius: 999, background: C.mint, color: C.ink, fontSize: 12, fontWeight: 900, whiteSpace: 'nowrap' }}>Windows 다운로드</a>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button onClick={() => login('google')} style={{ padding: '9px 13px', borderRadius: 999, border: `1px solid ${C.border2}`, background: 'transparent', color: C.muted, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 11, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}>기록 보기</button>
+            <a href={windowsInstallerUrl()} style={{ textDecoration: 'none', padding: '10px 16px', borderRadius: 999, background: C.mint, color: C.ink, fontSize: 12, fontWeight: 900, whiteSpace: 'nowrap' }}>Windows 다운로드</a>
+          </div>
         </header>
 
         <main style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(360px, 520px)', gap: 'clamp(28px, 6vw, 76px)', alignItems: 'center', padding: '46px 0 36px' }}>
@@ -211,6 +218,7 @@ function PublicDownloadPage() {
             </p>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 28 }}>
               <a href={windowsInstallerUrl()} style={{ textDecoration: 'none', padding: '14px 22px', borderRadius: 999, background: C.mint, color: C.ink, fontSize: 14, fontWeight: 950, boxShadow: '0 18px 42px rgba(0,232,197,0.16)' }}>Windows 앱 다운로드</a>
+              <button onClick={() => login('google')} style={{ padding: '13px 18px', borderRadius: 999, border: `1px solid ${C.border2}`, background: C.raised, color: C.soft, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 13, fontWeight: 850, cursor: 'pointer' }}>Google로 기록 보기</button>
             </div>
           </section>
 
@@ -398,6 +406,11 @@ function Sidebar({ page, setPage, open, setOpen, currentDay, user, onLogout, onR
 
       {/* Bottom */}
       <div style={{ padding: '10px 10px 24px', borderTop: `1px solid ${C.border}` }}>
+        {!isDesktopShell() && (
+          <a href={windowsInstallerUrl()} style={{ display: 'block', textDecoration: 'none', textAlign: 'center', margin: '0 10px 12px', padding: '9px 10px', borderRadius: 8, border: 'none', background: C.mint, color: C.ink, cursor: 'pointer', fontSize: 11, fontWeight: 900 }}>
+            앱 설치하기
+          </a>
+        )}
         <div style={{ padding: '8px 10px 14px', marginBottom: 8, borderBottom: `1px solid ${C.border}` }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             {user.avatarUrl ? <img src={user.avatarUrl} alt="" style={{ width: 24, height: 24, borderRadius: '50%' }} /> : <div style={{ width: 24, height: 24, borderRadius: '50%', background: C.chip }} />}
@@ -571,7 +584,6 @@ function DashboardPage({ user, setPage, currentDay, onConnectDevice }: { user: A
           <span style={{ fontSize: 11, color: C.alt }}>{100 - data.day}일 남음</span>
         </div>
       </div>
-
       {/* Stat cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 28 }}>
         {stats.map((s) => (

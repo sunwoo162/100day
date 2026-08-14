@@ -19,6 +19,7 @@ let mainWindow = null
 let tray = null
 let isQuitting = false
 
+app.setPath('userData', path.join(app.getPath('appData'), 'harufit'))
 app.setName('하루핏')
 if (isWindows) app.setAppUserModelId('site.harufit.desktop')
 nativeTheme.themeSource = 'dark'
@@ -79,14 +80,37 @@ function startApiServer() {
   loadEnvFile(path.join(app.getPath('userData'), '.env'))
 
   const serverPath = path.join(rootDir, 'server', 'index.mjs')
+  const dataDir = path.join(app.getPath('userData'), 'server-data')
+  migrateLegacyDatabase(dataDir)
   spawnChild(process.execPath, [serverPath], {
     env: {
       ELECTRON_RUN_AS_NODE: '1',
       API_PORT: process.env.API_PORT || '4000',
       WEB_ORIGIN: devServerUrl || 'http://localhost:4000',
       API_ORIGIN: process.env.API_ORIGIN || 'http://localhost:4000',
+      HARUFIT_DATA_DIR: dataDir,
     },
   })
+}
+
+function migrateLegacyDatabase(dataDir) {
+  try {
+    const targetDb = path.join(dataDir, '100days.db')
+    if (fs.existsSync(targetDb)) return
+
+    const legacyDb = path.join(rootDir, 'server', 'data', '100days.db')
+    if (!fs.existsSync(legacyDb)) return
+
+    fs.mkdirSync(dataDir, { recursive: true })
+    fs.copyFileSync(legacyDb, targetDb)
+    for (const suffix of ['-wal', '-shm']) {
+      const sidecar = `${legacyDb}${suffix}`
+      if (fs.existsSync(sidecar)) fs.copyFileSync(sidecar, `${targetDb}${suffix}`)
+    }
+    logDesktop(`migrated legacy database to ${targetDb}`)
+  } catch (error) {
+    logDesktop(`database migration failed: ${error?.message || error}`)
+  }
 }
 
 async function sessionCookieHeader() {
@@ -300,6 +324,9 @@ function createWindow() {
 
   mainWindow.webContents.on('did-navigate', () => {
     mainWindow.setTitle('하루핏')
+    session.fromPartition(desktopSessionPartition).cookies.flushStore().catch(error => {
+      logDesktop(`cookie flush failed: ${error?.message || error}`)
+    })
     startDesktopTrackerAfterLogin()
   })
 
