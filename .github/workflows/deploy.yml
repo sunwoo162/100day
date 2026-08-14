@@ -10,8 +10,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  build-desktop:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Set up pnpm
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Windows installer
+        run: pnpm run dist:desktop
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: harufit-windows-installer
+          path: desktop-release/*
+
   deploy:
     runs-on: ubuntu-latest
+    needs: build-desktop
 
     steps:
       - name: Checkout
@@ -30,6 +58,23 @@ jobs:
 
       - name: Build
         run: pnpm run build
+
+      - name: Download Windows installer
+        uses: actions/download-artifact@v4
+        with:
+          name: harufit-windows-installer
+          path: desktop-release-deploy
+
+      - name: Upload Windows installer to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ssh.gsmsv.site
+          port: 24136
+          username: ubuntu
+          password: ${{ secrets.SSH_PASSWORD }}
+          source: "desktop-release-deploy/*"
+          target: "/tmp/harufit-desktop-release"
+          strip_components: 1
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
@@ -62,6 +107,10 @@ jobs:
             cd "$APP_DIR"
             git fetch origin "$BRANCH"
             git reset --hard "origin/$BRANCH"
+
+            rm -rf desktop-release
+            mkdir -p desktop-release
+            cp -f /tmp/harufit-desktop-release/* desktop-release/
 
             test -n "$HARUFIT_GOOGLE_CLIENT_ID" || { echo "HARUFIT_GOOGLE_CLIENT_ID secret is missing"; exit 1; }
             test -n "$HARUFIT_GOOGLE_CLIENT_SECRET" || { echo "HARUFIT_GOOGLE_CLIENT_SECRET secret is missing"; exit 1; }

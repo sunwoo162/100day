@@ -22,6 +22,7 @@ let isQuitting = false
 app.setPath('userData', path.join(app.getPath('appData'), 'harufit'))
 app.setName('하루핏')
 if (isWindows) app.setAppUserModelId('site.harufit.desktop')
+if (app.isPackaged) app.setAsDefaultProtocolClient('harufit')
 nativeTheme.themeSource = 'dark'
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock()
@@ -358,6 +359,11 @@ app.whenReady().then(async () => {
 })
 
 app.on('second-instance', () => {
+  showMainWindow()
+})
+
+app.on('open-url', (event) => {
+  event.preventDefault()
   showMainWindow()
 })
 

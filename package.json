@@ -66,6 +66,14 @@
         }
       ]
     },
+    "protocols": [
+      {
+        "name": "Harufit App",
+        "schemes": [
+          "harufit"
+        ]
+      }
+    ],
     "nsis": {
       "installerIcon": "assets/icon.ico",
       "uninstallerIcon": "assets/icon.ico",

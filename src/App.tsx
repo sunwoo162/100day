@@ -127,6 +127,10 @@ function windowsInstallerUrl() {
   return `${downloadBaseUrl()}/downloads/harufit-windows`
 }
 
+function desktopOpenUrl() {
+  return 'harufit://open'
+}
+
 function shortTime(iso: string | null) {
   if (!iso) return '아직 없음'
   const date = new Date(iso)
@@ -558,7 +562,7 @@ function DashboardPage({ user, setPage, currentDay, onConnectDevice }: { user: A
   const devPcts = deviceTotal > 0 ? [1] : [0]
 
   return (
-    <div style={{ padding: '32px 36px', maxWidth: 1080 }}>
+    <div style={{ padding: '32px 36px' }}>
       {/* Header */}
       <div style={{ marginBottom: 36 }}>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 12 }}>
@@ -685,23 +689,9 @@ function DashboardPage({ user, setPage, currentDay, onConnectDevice }: { user: A
               ))}
             </div>
           </div>
-          <div style={{ display: 'grid', gap: 10, minWidth: 260 }}>
-            <a href={windowsInstallerUrl()} style={{ textDecoration: 'none', textAlign: 'center', padding: '13px 20px', borderRadius: 999, background: C.mint, color: C.ink, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 13, fontWeight: 900, boxShadow: '0 16px 34px rgba(0,232,197,0.14)' }}>Windows 다운로드</a>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              {[
-                ['계정 동기화', '웹/앱 공통'],
-                ['PC 기록', '자동 저장'],
-              ].map(([label, value]) => (
-                <div key={label} style={{ borderRadius: 12, padding: '11px 12px', background: 'rgba(0,0,0,0.22)', border: `1px solid ${C.border}` }}>
-                  <div style={{ fontSize: 9, color: C.alt, marginBottom: 5, fontWeight: 800 }}>{label}</div>
-                  <div style={{ fontSize: 12, color: C.white, fontWeight: 900 }}>{value}</div>
-                </div>
-              ))}
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, borderRadius: 12, padding: '11px 12px', background: 'rgba(0,232,197,0.08)', border: `1px solid rgba(0,232,197,0.16)` }}>
-              <span style={{ fontSize: 10, color: C.mint, fontWeight: 900 }}>앱 사용량까지 기록</span>
-              <span style={{ fontSize: 10, color: C.alt, fontFamily: "'JetBrains Mono', monospace" }}>AUTO</span>
-            </div>
+          <div style={{ display: 'grid', gap: 10, minWidth: 210 }}>
+            <a href={desktopOpenUrl()} style={{ textDecoration: 'none', textAlign: 'center', padding: '13px 20px', borderRadius: 999, background: C.mint, color: C.ink, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 13, fontWeight: 900, boxShadow: '0 16px 34px rgba(0,232,197,0.14)' }}>하루핏 열기</a>
+            <a href={windowsInstallerUrl()} style={{ textDecoration: 'none', textAlign: 'center', padding: '10px 18px', borderRadius: 999, border: `1px solid ${C.border2}`, background: 'rgba(0,0,0,0.18)', color: C.muted, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 11, fontWeight: 800 }}>Windows 다운로드</a>
           </div>
         </div>
       )}
