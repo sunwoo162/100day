@@ -19,7 +19,14 @@ let mainWindow = null
 let tray = null
 let isQuitting = false
 
+app.setName('하루핏')
+if (isWindows) app.setAppUserModelId('site.harufit.desktop')
 nativeTheme.themeSource = 'dark'
+
+const gotSingleInstanceLock = app.requestSingleInstanceLock()
+if (!gotSingleInstanceLock) {
+  app.quit()
+}
 
 function withDesktopFlag(url) {
   const parsed = new URL(url)
@@ -196,6 +203,17 @@ function startDesktopTrackerAfterLogin() {
   authTrackerTimer = setInterval(check, 2000)
 }
 
+async function clearStaleWebCache() {
+  const targetSession = session.fromPartition(desktopSessionPartition)
+  await targetSession.clearCache().catch(error => {
+    logDesktop(`clear cache failed: ${error?.message || error}`)
+  })
+  const registrations = await targetSession.serviceWorkers.getAllRunning().catch(() => ({}))
+  for (const scope of Object.keys(registrations || {})) {
+    await targetSession.serviceWorkers.stopWorkerForScope(scope).catch(() => {})
+  }
+}
+
 function showMainWindow() {
   if (!mainWindow || mainWindow.isDestroyed()) {
     createWindow()
@@ -267,7 +285,21 @@ function createWindow() {
     return { action: 'deny' }
   })
 
+  mainWindow.webContents.on('page-title-updated', (event) => {
+    event.preventDefault()
+    mainWindow.setTitle('하루핏')
+  })
+
+  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
+    logDesktop(`load failed: ${errorCode} ${errorDescription} ${validatedURL}`)
+  })
+
+  mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    if (level >= 2) logDesktop(`renderer console: ${message} (${sourceId}:${line})`)
+  })
+
   mainWindow.webContents.on('did-navigate', () => {
+    mainWindow.setTitle('하루핏')
     startDesktopTrackerAfterLogin()
   })
 
@@ -287,6 +319,7 @@ function createWindow() {
 app.whenReady().then(async () => {
   enableAutoLaunch()
   startApiServer()
+  await clearStaleWebCache()
   await migrateLegacySessionCookie()
   startDesktopTrackerAfterLogin()
   createTray()
@@ -295,6 +328,10 @@ app.whenReady().then(async () => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
+})
+
+app.on('second-instance', () => {
+  showMainWindow()
 })
 
 app.on('window-all-closed', () => {
