@@ -8,8 +8,10 @@ const rootDir = app.isPackaged ? path.join(process.resourcesPath, 'app') : appRo
 const iconPath = path.join(rootDir, 'assets', 'icon.ico')
 const isWindows = process.platform === 'win32'
 const devServerUrl = process.env.HARUFIT_DESKTOP_DEV_SERVER_URL || ''
-const baseAppUrl = devServerUrl || 'http://localhost:4000'
-const apiBaseUrl = 'http://localhost:4000/api'
+const productionAppUrl = process.env.HARUFIT_WEB_ORIGIN || 'https://harufit.https.gsmsv.site'
+const baseAppUrl = devServerUrl || productionAppUrl
+const apiBaseUrl = (process.env.HARUFIT_API_ORIGIN || `${baseAppUrl.replace(/\/$/, '')}/api`).replace(/\/$/, '')
+const appCookieUrl = baseAppUrl.replace(/\/$/, '')
 const desktopSessionPartition = 'persist:harufit'
 const children = new Set()
 let desktopTrackerProcess = null
@@ -115,22 +117,22 @@ function migrateLegacyDatabase(dataDir) {
 }
 
 async function sessionCookieHeader() {
-  const cookies = await session.fromPartition(desktopSessionPartition).cookies.get({ url: 'http://localhost:4000', name: 'sid' })
+  const cookies = await session.fromPartition(desktopSessionPartition).cookies.get({ url: appCookieUrl, name: 'sid' })
   if (!cookies.length) return ''
   return cookies.map(cookie => `${cookie.name}=${cookie.value}`).join('; ')
 }
 
 async function migrateLegacySessionCookie() {
   const targetSession = session.fromPartition(desktopSessionPartition)
-  const existing = await targetSession.cookies.get({ url: 'http://localhost:4000', name: 'sid' })
+  const existing = await targetSession.cookies.get({ url: appCookieUrl, name: 'sid' })
   if (existing.length) return
 
-  const legacy = await session.defaultSession.cookies.get({ url: 'http://localhost:4000', name: 'sid' })
+  const legacy = await session.defaultSession.cookies.get({ url: appCookieUrl, name: 'sid' })
   if (!legacy.length) return
 
   const cookie = legacy[0]
   await targetSession.cookies.set({
-    url: 'http://localhost:4000',
+    url: appCookieUrl,
     name: cookie.name,
     value: cookie.value,
     path: cookie.path || '/',
@@ -346,7 +348,7 @@ function createWindow() {
 
 app.whenReady().then(async () => {
   enableAutoLaunch()
-  startApiServer()
+  if (devServerUrl) startApiServer()
   await clearStaleWebCache()
   await migrateLegacySessionCookie()
   startDesktopTrackerAfterLogin()
