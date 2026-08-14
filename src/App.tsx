@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { api, type AnalyticsData, type AuthUser, type ChallengeData, type DashboardData, type DeviceData, type DevicePairingData, type FocusSession, type ResultData, type StudyCategory, type TimelineEntry } from './lib/api'
+import { api, type AnalyticsData, type AppClassification, type AuthUser, type ChallengeData, type DashboardData, type DeviceData, type DevicePairingData, type FocusSession, type ResultData, type StudyCategory, type TimelineEntry } from './lib/api'
 
 type Page = 'dashboard' | 'timeline' | 'analytics' | 'focus' | 'devices' | 'result'
 
@@ -30,22 +30,101 @@ const NAV: { id: Page; label: string; Icon: (p: { active: boolean }) => React.Re
   { id: 'devices',   label: '기기',   Icon: ({ active }) => <IcoDevice c={active ? C.mint : '#4a4a4a'} /> },
 ]
 
+const PAGE_PATH: Record<Page, string> = {
+  dashboard: '/main',
+  timeline: '/timeline',
+  analytics: '/analytics',
+  focus: '/study',
+  devices: '/devices',
+  result: '/result',
+}
+
+const PATH_PAGE: Record<string, Page> = {
+  '/': 'dashboard',
+  '/main': 'dashboard',
+  '/dashboard': 'dashboard',
+  '/timeline': 'timeline',
+  '/analytics': 'analytics',
+  '/study': 'focus',
+  '/focus': 'focus',
+  '/devices': 'devices',
+  '/result': 'result',
+}
+
+function appPathname() {
+  const base = import.meta.env.BASE_URL || '/'
+  const pathname = window.location.pathname
+  const withoutBase = base !== '/' && pathname.startsWith(base)
+    ? pathname.slice(base.length - 1)
+    : pathname
+  const normalized = withoutBase.replace(/\/+$/, '') || '/'
+  return PATH_PAGE[normalized] ? normalized : '/'
+}
+
+function pageFromLocation(): Page {
+  return PATH_PAGE[appPathname()] || 'dashboard'
+}
+
+function urlForPage(page: Page) {
+  const base = import.meta.env.BASE_URL || '/'
+  const path = PAGE_PATH[page]
+  if (base === '/') return path
+  return `${base.replace(/\/$/, '')}${path}`
+}
+
 function fmtMinutes(min: number) {
-  const h = Math.floor(min / 60)
-  const m = min % 60
-  if (h <= 0) return `${m}분`
-  return `${h}시간 ${String(m).padStart(2, '0')}분`
+  const totalSeconds = Math.round((Number(min) || 0) * 60)
+  const h = Math.floor(totalSeconds / 3600)
+  const m = Math.floor((totalSeconds % 3600) / 60)
+  const s = totalSeconds % 60
+  if (h <= 0 && m <= 0) return `${s}초`
+  if (h <= 0) return `${m}분 ${String(s).padStart(2, '0')}초`
+  return `${h}시간 ${String(m).padStart(2, '0')}분 ${String(s).padStart(2, '0')}초`
 }
 
 function fmtDelta(delta: number, unit = '분') {
   if (delta === 0) return '어제와 같음'
+  if (unit === '분') return `어제보다 ${delta > 0 ? '+' : '-'}${fmtMinutes(Math.abs(delta))}`
   return `어제보다 ${delta > 0 ? '+' : '-'}${Math.abs(delta).toLocaleString()}${unit}`
 }
 
 function parseHourValue(display: string) {
   const hours = display.match(/(\d+)h/)?.[1] ?? '0'
   const mins = display.match(/(\d+)m/)?.[1] ?? '0'
-  return `${Number(hours)}시간 ${String(Number(mins)).padStart(2, '0')}분`
+  const secs = display.match(/(\d+)s/)?.[1] ?? '0'
+  return `${Number(hours)}시간 ${String(Number(mins)).padStart(2, '0')}분 ${String(Number(secs)).padStart(2, '0')}초`
+}
+
+function browserUsageName() {
+  return '하루핏 웹'
+}
+
+function isDesktopShell() {
+  const hasDesktopFlag = window.location.search.includes('desktop=1')
+  if (hasDesktopFlag) {
+    window.localStorage.setItem('harufit.desktopShell', '1')
+  }
+  return /\bElectron\//.test(navigator.userAgent) || hasDesktopFlag || window.localStorage.getItem('harufit.desktopShell') === '1'
+}
+
+function apiBaseUrl() {
+  const configured = import.meta.env.VITE_API_BASE_URL || '/api'
+  if (/^https?:\/\//.test(configured)) return configured.replace(/\/$/, '')
+  return `${window.location.origin}${configured.startsWith('/') ? configured : `/${configured}`}`.replace(/\/$/, '')
+}
+
+function downloadBaseUrl() {
+  return apiBaseUrl().replace(/\/api$/, '')
+}
+
+function windowsTrackerCommand(pairingToken: string) {
+  const downloadUrl = `${downloadBaseUrl()}/downloads/windows-pc-tracker.ps1`
+  const apiUrl = apiBaseUrl()
+  return `powershell -NoProfile -ExecutionPolicy Bypass -Command "$u='${downloadUrl}'; $p=Join-Path $env:TEMP 'harufit-tracker.ps1'; Invoke-WebRequest -UseBasicParsing $u -OutFile $p; powershell -NoProfile -ExecutionPolicy Bypass -File $p -ApiBase '${apiUrl}' -PairingToken '${pairingToken}' -InstallStartup"`
+}
+
+function windowsInstallerUrl() {
+  return `${downloadBaseUrl()}/downloads/harufit-windows`
 }
 
 function shortTime(iso: string | null) {
@@ -70,6 +149,8 @@ function ErrorBlock({ message }: { message: string }) {
 }
 
 function LoginPage() {
+  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams()
+  const authFailed = searchParams.get('auth') === 'failed'
   const login = (provider: 'github' | 'google') => {
     window.location.href = `/api/auth/${provider}`
   }
@@ -91,17 +172,86 @@ function LoginPage() {
           <IcoGoogleBrand />
           <span>Google로 계속하기</span>
         </button>
+        {authFailed && (
+          <div style={{ marginTop: 14, padding: '10px 12px', borderRadius: 8, border: `1px solid ${C.border2}`, background: '#141414', color: C.mintMuted, fontSize: 12, lineHeight: 1.5, textAlign: 'center' }}>
+            로그인에 실패했습니다.
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function PublicDownloadPage() {
+  return (
+    <div style={{ minHeight: '100vh', background: C.canvas, color: C.white, fontFamily: "'Pretendard', system-ui, sans-serif", overflow: 'hidden' }}>
+      <div style={{ minHeight: '100vh', display: 'grid', gridTemplateRows: 'auto 1fr', padding: '24px clamp(20px, 5vw, 56px)' }}>
+        <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 18 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+            <LogoMark />
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 900, color: C.white, letterSpacing: '-0.02em' }}>하루핏</div>
+              <div style={{ fontSize: 10, color: C.alt, fontFamily: "'JetBrains Mono', monospace" }}>desktop activity tracker</div>
+            </div>
+          </div>
+          <a href={windowsInstallerUrl()} style={{ textDecoration: 'none', padding: '10px 16px', borderRadius: 999, background: C.mint, color: C.ink, fontSize: 12, fontWeight: 900, whiteSpace: 'nowrap' }}>Windows 다운로드</a>
+        </header>
+
+        <main style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(360px, 520px)', gap: 'clamp(28px, 6vw, 76px)', alignItems: 'center', padding: '46px 0 36px' }}>
+          <section>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 9px', borderRadius: 8, background: 'rgba(0,232,197,0.1)', border: `1px solid rgba(0,232,197,0.16)`, marginBottom: 18 }}>
+              <IcoDevice c={C.mint} />
+              <span style={{ fontSize: 10, color: C.mint, fontFamily: "'JetBrains Mono', monospace", fontWeight: 900, letterSpacing: '0.1em' }}>WINDOWS FIRST</span>
+            </div>
+            <h1 style={{ margin: 0, fontSize: 'clamp(40px, 6.4vw, 74px)', lineHeight: 1.08, letterSpacing: 0, fontWeight: 950, color: C.white }}>
+              오늘의 시간을<br />측정해보세요
+            </h1>
+            <p style={{ margin: '22px 0 0', maxWidth: 560, fontSize: 15, lineHeight: 1.9, color: C.muted }}>
+              하루핏 PC 앱을 설치하고 앱 안에서 로그인하세요. 사용 중인 Windows 앱, 창 제목, 개발 시간을 자동으로 기록하고 대시보드로 보여줍니다.
+            </p>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 28 }}>
+              <a href={windowsInstallerUrl()} style={{ textDecoration: 'none', padding: '14px 22px', borderRadius: 999, background: C.mint, color: C.ink, fontSize: 14, fontWeight: 950, boxShadow: '0 18px 42px rgba(0,232,197,0.16)' }}>Windows 앱 다운로드</a>
+            </div>
+          </section>
+
+          <section style={{ background: 'linear-gradient(145deg, rgba(0,232,197,0.12), rgba(26,26,26,1) 38%, rgba(13,13,13,1))', border: `1px solid rgba(0,232,197,0.16)`, borderRadius: 18, padding: 24, boxShadow: '0 34px 100px rgba(0,0,0,0.32)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28 }}>
+              <div>
+                <div style={{ fontSize: 12, color: C.soft, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', fontWeight: 900 }}>LIVE APPS</div>
+                <div style={{ fontSize: 11, color: C.alt, marginTop: 4 }}>설치 후 자동 측정</div>
+              </div>
+              <div style={{ width: 38, height: 38, borderRadius: 12, background: C.mint, color: C.ink, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 950 }}>H</div>
+            </div>
+            {[
+              ['Code - 하루핏', '1시간 12분', 92],
+              ['Chrome - 문서', '38분', 52],
+              ['Terminal - pnpm', '24분', 34],
+            ].map(([name, time, pct]) => (
+              <div key={name} style={{ marginBottom: 18 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14, marginBottom: 7 }}>
+                  <span style={{ color: C.white, fontSize: 13, fontWeight: 800 }}>{name}</span>
+                  <span style={{ color: C.alt, fontSize: 11, fontFamily: "'JetBrains Mono', monospace" }}>{time}</span>
+                </div>
+                <div style={{ height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 99 }}>
+                  <div style={{ width: `${pct}%`, height: '100%', background: C.mint, borderRadius: 99 }} />
+                </div>
+              </div>
+            ))}
+          </section>
+        </main>
       </div>
     </div>
   )
 }
 
 export default function App() {
-  const [page, setPage] = useState<Page>('dashboard')
+  const [page, setPage] = useState<Page>(() => pageFromLocation())
   const [menuOpen, setMenuOpen] = useState(false)
   const [challenge, setChallenge] = useState<ChallengeData | null>(null)
   const [user, setUser] = useState<AuthUser | null>(null)
   const [authLoading, setAuthLoading] = useState(true)
+  const [autoPairComputer, setAutoPairComputer] = useState(false)
+  const [resultLockedOpen, setResultLockedOpen] = useState(false)
 
   useEffect(() => {
     api.me()
@@ -111,34 +261,102 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+    const onPopState = () => setPage(pageFromLocation())
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
+
+  useEffect(() => {
     if (!user) return
     api.challenge().then(setChallenge).catch(() => setChallenge(null))
+  }, [user])
+
+  useEffect(() => {
+    if (!user) return
+    if (isDesktopShell()) return
+    let lastSentAt = Date.now()
+    const sendBrowserUsage = () => {
+      if (document.hidden) {
+        lastSentAt = Date.now()
+        return
+      }
+      const now = Date.now()
+      const minutes = Math.min(0.5, Math.max(0, (now - lastSentAt) / 60000))
+      lastSentAt = now
+      if (minutes < 0.05) return
+      api.trackBrowser({ minutes, app_name: browserUsageName() }).catch(() => {})
+    }
+    const interval = window.setInterval(sendBrowserUsage, 15000)
+    const onVisibilityChange = () => {
+      if (document.hidden) sendBrowserUsage()
+      else lastSentAt = Date.now()
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      sendBrowserUsage()
+    }
   }, [user])
 
   const logout = async () => {
     await api.logout().catch(() => {})
     setUser(null)
     setChallenge(null)
-    setPage('dashboard')
+    navigatePage('dashboard', true)
   }
 
+  const navigatePage = (nextPage: Page, replace = false) => {
+    setPage(nextPage)
+    const nextUrl = urlForPage(nextPage)
+    if (window.location.pathname !== nextUrl) {
+      const method = replace ? 'replaceState' : 'pushState'
+      window.history[method]({}, '', nextUrl)
+    }
+  }
+
+  useEffect(() => {
+    if (!challenge || page !== 'result' || challenge.currentDay >= 100) return
+    setResultLockedOpen(true)
+    navigatePage('dashboard', true)
+  }, [challenge, page])
+
   if (authLoading) return <LoadingBlock label="로그인 상태를 확인하는 중입니다" />
-  if (!user) return <LoginPage />
+  if (!user) return isDesktopShell() ? <LoginPage /> : <PublicDownloadPage />
 
   const currentDay = challenge?.currentDay ?? 1
+  const remainingResultDays = Math.max(0, 100 - currentDay)
+  const openResult = () => {
+    if (currentDay < 100) {
+      setResultLockedOpen(true)
+      setMenuOpen(false)
+      return
+    }
+    navigatePage('result')
+    setMenuOpen(false)
+  }
   return (
     <div style={{ display: 'flex', height: '100vh', background: C.canvas, overflow: 'hidden', fontFamily: "'Pretendard', system-ui, sans-serif" }}>
-      <Sidebar page={page} setPage={setPage} open={menuOpen} setOpen={setMenuOpen} currentDay={currentDay} user={user} onLogout={logout} />
+      <Sidebar page={page} setPage={navigatePage} open={menuOpen} setOpen={setMenuOpen} currentDay={currentDay} user={user} onLogout={logout} onResultClick={openResult} />
       <main style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }} className="scrollbar-none">
         <MobileTopbar page={page} onMenu={() => setMenuOpen(true)} />
-        {page === 'dashboard' && <DashboardPage setPage={setPage} currentDay={currentDay} />}
+        {page === 'dashboard' && <DashboardPage user={user} setPage={navigatePage} currentDay={currentDay} onConnectDevice={() => { setAutoPairComputer(true); navigatePage('devices') }} />}
         {page === 'timeline'  && <TimelinePage currentDay={currentDay} />}
         {page === 'analytics' && <AnalyticsPage />}
         {page === 'focus'     && <FocusPage currentDay={currentDay} />}
-        {page === 'devices'   && <DevicesPage />}
+        {page === 'devices'   && <DevicesPage autoPairComputer={autoPairComputer} onAutoPairHandled={() => setAutoPairComputer(false)} />}
         {page === 'result'    && <ResultPage />}
       </main>
       {menuOpen && <div onClick={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', zIndex: 39 }} />}
+      {resultLockedOpen && (
+        <div onClick={() => setResultLockedOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.76)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 90, padding: 24 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: 'min(420px, 100%)', background: C.raised, border: `1px solid ${C.border2}`, borderRadius: 18, padding: 30, textAlign: 'center', boxShadow: '0 28px 90px rgba(0,0,0,0.44)' }}>
+            <div style={{ color: C.white, fontSize: 24, fontWeight: 900, marginBottom: 10 }}>{remainingResultDays}일 남았어요</div>
+            <div style={{ color: C.alt, fontSize: 13, lineHeight: 1.8, marginBottom: 22 }}>100일을 향해서 화이팅</div>
+            <button onClick={() => setResultLockedOpen(false)} style={{ width: '100%', border: 'none', borderRadius: 12, background: C.mint, color: C.ink, padding: '12px 14px', fontSize: 13, fontWeight: 900, cursor: 'pointer' }}>확인</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -146,7 +364,7 @@ export default function App() {
 /* ═══════════════════════════════════════════════
    SIDEBAR
 ═══════════════════════════════════════════════ */
-function Sidebar({ page, setPage, open, setOpen, currentDay, user, onLogout }: { page: Page; setPage: (p: Page) => void; open: boolean; setOpen: (v: boolean) => void; currentDay: number; user: AuthUser; onLogout: () => void }) {
+function Sidebar({ page, setPage, open, setOpen, currentDay, user, onLogout, onResultClick }: { page: Page; setPage: (p: Page) => void; open: boolean; setOpen: (v: boolean) => void; currentDay: number; user: AuthUser; onLogout: () => void; onResultClick: () => void }) {
   return (
     <aside data-open={open} style={{
       width: 210, minWidth: 210, background: C.surface,
@@ -192,7 +410,7 @@ function Sidebar({ page, setPage, open, setOpen, currentDay, user, onLogout }: {
             로그아웃
           </button>
         </div>
-        <NavBtn active={page === 'result'} onClick={() => { setPage('result'); setOpen(false) }}>
+        <NavBtn active={page === 'result'} onClick={onResultClick}>
           <IcoTrophy c={page === 'result' ? C.mint : '#4a4a4a'} />
           <span>백일 결과</span>
         </NavBtn>
@@ -230,41 +448,88 @@ function MobileTopbar({ page, onMenu }: { page: Page; onMenu: () => void }) {
 /* ═══════════════════════════════════════════════
    DASHBOARD
 ═══════════════════════════════════════════════ */
-function DashboardPage({ setPage, currentDay }: { setPage: (p: Page) => void; currentDay: number }) {
+function DashboardPage({ user, setPage, currentDay, onConnectDevice }: { user: AuthUser; setPage: (p: Page) => void; currentDay: number; onConnectDevice: () => void }) {
   const [data, setData] = useState<DashboardData | null>(null)
   const [error, setError] = useState('')
+  const [appPicker, setAppPicker] = useState<'focus' | 'development' | null>(null)
+  const [now, setNow] = useState(() => Date.now())
+  const liveStartRef = useRef(Date.now())
+  const lastPcMinutesRef = useRef<number | null>(null)
+  const desktopShell = isDesktopShell()
 
   useEffect(() => {
-    api.dashboard(currentDay).then(setData).catch((err) => setError(err.message))
+    let cancelled = false
+    const load = () => {
+      api.dashboard(currentDay)
+        .then((next) => {
+          if (cancelled) return
+          setData(next)
+          setError('')
+        })
+        .catch((err) => {
+          if (!cancelled) setError(err.message)
+        })
+    }
+    load()
+    const interval = window.setInterval(load, 1000)
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
   }, [currentDay])
+
+  const reloadDashboard = () => api.dashboard(currentDay).then(setData).catch((err) => setError(err.message))
+
+  const addClassification = async (appName: string, category: 'focus' | 'development') => {
+    await api.addAppClassification({ app_name: appName, category })
+    await reloadDashboard()
+  }
+
+  const removeClassification = async (item: AppClassification) => {
+    await api.deleteAppClassification(item.name, item.category)
+    await reloadDashboard()
+  }
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(interval)
+  }, [])
 
   if (error) return <ErrorBlock message={error} />
   if (!data) return <LoadingBlock />
 
   const m = data.metrics
+  if (lastPcMinutesRef.current !== m.pc.minutes) {
+    lastPcMinutesRef.current = m.pc.minutes ?? 0
+    liveStartRef.current = now
+  }
+  const liveMinutes = document.hidden ? 0 : Math.max(0, (now - liveStartRef.current) / 60000)
+  const pcDisplayMinutes = (m.pc.minutes ?? 0) + liveMinutes
   const recent = data.recent ?? []
   const hasRecent = recent.length > 0
   const spark = {
     pc: recent.map((row) => row.pc_minutes / 60),
-    phone: recent.map((row) => row.phone_minutes / 60),
     focus: recent.map((row) => row.focus_minutes / 60),
-    steps: recent.map((row) => row.steps),
-    exercise: recent.map((row) => row.exercise_minutes),
     development: recent.map((row) => row.development_minutes / 60),
     github: recent.map((row) => row.github_commits),
   }
   const stats = [
-    { id: 'pc', label: 'PC', value: parseHourValue(m.pc.display || '0h 00m'), sub: fmtDelta(m.pc.delta), up: m.pc.delta >= 0, spark: spark.pc, max: 10, color: C.mint },
-    { id: 'phone', label: '휴대폰', value: parseHourValue(m.phone.display || '0h 00m'), sub: fmtDelta(m.phone.delta), up: m.phone.delta <= 0, spark: spark.phone, max: 10, color: C.faint },
-    { id: 'focus', label: '공부', value: parseHourValue(m.focus.display || '0h 00m'), sub: fmtDelta(m.focus.delta), up: m.focus.delta >= 0, spark: spark.focus, max: 5, color: C.mint },
-    { id: 'steps', label: '걸음', value: (m.steps.value || 0).toLocaleString(), sub: fmtDelta(m.steps.delta, ''), up: m.steps.delta >= 0, spark: spark.steps, max: 12000, color: C.mint },
-    { id: 'ex', label: '운동', value: fmtMinutes(m.exercise.minutes || 0), sub: fmtDelta(m.exercise.delta), up: m.exercise.delta >= 0, spark: spark.exercise, max: 90, color: C.mintMuted },
-    { id: 'dev', label: '개발', value: parseHourValue(m.development.display || '0h 00m'), sub: fmtDelta(m.development.delta), up: m.development.delta >= 0, spark: spark.development, max: 5, color: C.mintBright },
-    { id: 'git', label: 'GitHub', value: `커밋 ${m.github.commits || 0}개`, sub: fmtDelta(m.github.delta, ''), up: m.github.delta >= 0, spark: spark.github, max: 12, color: C.mint },
+    { id: 'pc', label: 'PC', value: fmtMinutes(pcDisplayMinutes), sub: fmtDelta(m.pc.delta), up: m.pc.delta >= 0, spark: spark.pc, max: 10, color: C.mint },
+    { id: 'focus', label: '공부', value: parseHourValue(m.focus.display || '0h 00m'), sub: fmtDelta(m.focus.delta), up: m.focus.delta >= 0, spark: spark.focus, max: 5, color: C.mint, action: '앱 등록하기' },
+    { id: 'dev', label: '개발', value: parseHourValue(m.development.display || '0h 00m'), sub: fmtDelta(m.development.delta), up: m.development.delta >= 0, spark: spark.development, max: 5, color: C.mintBright, action: '앱 등록하기' },
+    { id: 'git', label: 'GitHub', value: `커밋 ${m.github.commits || 0}개`, sub: fmtDelta(m.github.delta, ''), up: m.github.delta >= 0, spark: spark.github, max: 12, color: C.mint, action: user.providers?.includes('github') ? '' : '연결하기' },
   ]
 
-  const maxAppMinutes = Math.max(1, ...data.apps.map((app) => app.minutes))
-  const apps = data.apps.map((app, i) => ({
+  const appTotals = new Map<string, { name: string; minutes: number }>()
+  data.apps.forEach((app) => appTotals.set(app.name, { name: app.name, minutes: app.minutes }))
+  if (!desktopShell) {
+    const liveAppName = browserUsageName()
+    const currentApp = appTotals.get(liveAppName)
+    appTotals.set(liveAppName, { name: liveAppName, minutes: (currentApp?.minutes ?? 0) + liveMinutes })
+  }
+  const appRows = [...appTotals.values()].filter((app) => app.minutes > 0).sort((a, b) => b.minutes - a.minutes).slice(0, 8)
+  const maxAppMinutes = Math.max(1 / 60, ...appRows.map((app) => app.minutes))
+  const apps = appRows.map((app, i) => ({
     name: app.name,
     dur: fmtMinutes(app.minutes),
     pct: Math.round((app.minutes / maxAppMinutes) * 100),
@@ -281,10 +546,8 @@ function DashboardPage({ setPage, currentDay }: { setPage: (p: Page) => void; cu
     dot: event.type === 'development' ? C.mint : event.type === 'focus' ? C.mintBright : event.type === 'health' ? C.mintMuted : '#3a3a3a',
   }))
 
-  const pcMinutes = m.pc.minutes ?? 0
-  const phoneMinutes = m.phone.minutes ?? 0
-  const deviceTotal = pcMinutes + phoneMinutes
-  const devPcts = deviceTotal > 0 ? [pcMinutes / deviceTotal, phoneMinutes / deviceTotal] : [0, 0]
+  const deviceTotal = pcDisplayMinutes
+  const devPcts = deviceTotal > 0 ? [1] : [0]
 
   return (
     <div style={{ padding: '32px 36px', maxWidth: 1080 }}>
@@ -313,7 +576,14 @@ function DashboardPage({ setPage, currentDay }: { setPage: (p: Page) => void; cu
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 28 }}>
         {stats.map((s) => (
           <div key={s.id} style={{ background: C.raised, borderRadius: 14, padding: '18px 18px 14px', border: `1px solid ${C.border}` }}>
-            <div style={{ fontSize: 11, color: C.soft, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 10, fontWeight: 700 }}>{s.label.toUpperCase()}</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+              <div style={{ fontSize: 11, color: C.soft, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', fontWeight: 700 }}>{s.label.toUpperCase()}</div>
+              {s.action && (
+                <button onClick={() => s.id === 'git' ? (window.location.href = '/api/auth/github') : setAppPicker(s.id === 'focus' ? 'focus' : 'development')} style={{ border: `1px solid ${C.border2}`, background: 'rgba(0,232,197,0.08)', color: C.mint, borderRadius: 999, padding: '5px 8px', fontSize: 10, fontWeight: 800, cursor: 'pointer', fontFamily: "'Pretendard', system-ui, sans-serif", whiteSpace: 'nowrap' }}>
+                  {s.action}
+                </button>
+              )}
+            </div>
             <div style={{ fontSize: 22, fontWeight: 800, color: C.white, letterSpacing: '-0.02em', marginBottom: 4, lineHeight: 1 }}>{s.value}</div>
             <div style={{ fontSize: 10, color: s.up ? C.mintMuted : C.faint, marginBottom: 12 }}>{s.sub}</div>
             {hasRecent ? <Sparkline data={s.spark} color={s.color} max={s.max} /> : <EmptyChart height={28} />}
@@ -329,8 +599,7 @@ function DashboardPage({ setPage, currentDay }: { setPage: (p: Page) => void; cu
           <DeviceRing pcts={devPcts} />
           <div style={{ marginTop: 18, width: '100%' }}>
             {[
-              { label: '노트북', val: parseHourValue(m.pc.display || '0h 00m'), color: C.mint },
-              { label: '휴대폰',  val: parseHourValue(m.phone.display || '0h 00m'), color: C.mintMuted },
+              { label: '노트북', val: fmtMinutes(pcDisplayMinutes), color: C.mint },
             ].map((d) => (
               <div key={d.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 9 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
@@ -388,6 +657,94 @@ function DashboardPage({ setPage, currentDay }: { setPage: (p: Page) => void; cu
           Start →
         </button>
       </div>
+      {appPicker && data && (
+        <AppPickerModal
+          category={appPicker}
+          apps={appRows}
+          selected={data.appClassifications.filter(item => item.category === appPicker)}
+          onAdd={(appName) => addClassification(appName, appPicker)}
+          onRemove={removeClassification}
+          onClose={() => setAppPicker(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+function AppPickerModal({
+  category,
+  apps,
+  selected,
+  onAdd,
+  onRemove,
+  onClose,
+}: {
+  category: 'focus' | 'development'
+  apps: { name: string; minutes: number }[]
+  selected: AppClassification[]
+  onAdd: (appName: string) => Promise<void>
+  onRemove: (item: AppClassification) => Promise<void>
+  onClose: () => void
+}) {
+  const [customName, setCustomName] = useState('')
+  const [saving, setSaving] = useState('')
+  const selectedNames = new Set(selected.map(item => item.name))
+  const title = category === 'development' ? '개발 앱 등록' : '공부 앱 등록'
+  const available = apps.filter(app => !selectedNames.has(app.name))
+
+  const add = async (name: string) => {
+    const appName = name.trim()
+    if (!appName || saving) return
+    setSaving(appName)
+    try {
+      await onAdd(appName)
+      setCustomName('')
+    } finally {
+      setSaving('')
+    }
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.68)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 24 }} onClick={onClose}>
+      <div style={{ width: 'min(520px, 100%)', maxHeight: '82vh', overflow: 'auto', background: C.raised, border: `1px solid ${C.border2}`, borderRadius: 14, padding: 22, boxShadow: '0 30px 90px rgba(0,0,0,0.42)' }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, marginBottom: 18 }}>
+          <div>
+            <div style={{ color: C.white, fontSize: 18, fontWeight: 900 }}>{title}</div>
+            <div style={{ color: C.alt, fontSize: 11, marginTop: 5 }}>선택한 앱 사용 시간이 {category === 'development' ? '개발' : '공부'} 시간에 더해집니다.</div>
+          </div>
+          <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: 10, border: `1px solid ${C.border2}`, background: C.surface, color: C.muted, cursor: 'pointer', fontSize: 18 }}>×</button>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
+          <input value={customName} onChange={e => setCustomName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') add(customName) }} placeholder="앱 이름 직접 입력: chrome, Code, Discord" style={{ flex: 1, background: C.surface, border: `1px solid ${C.border2}`, borderRadius: 9, color: C.white, padding: '11px 12px', outline: 'none', fontSize: 12 }} />
+          <button onClick={() => add(customName)} style={{ border: 'none', background: C.mint, color: C.ink, borderRadius: 9, padding: '0 14px', fontWeight: 900, cursor: 'pointer' }}>추가</button>
+        </div>
+
+        {selected.length > 0 && (
+          <div style={{ marginBottom: 18 }}>
+            <div style={{ color: C.soft, fontSize: 11, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 8 }}>등록됨</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+              {selected.map(item => (
+                <button key={item.name} onClick={() => onRemove(item)} style={{ border: `1px solid rgba(0,232,197,0.28)`, background: 'rgba(0,232,197,0.1)', color: C.mint, borderRadius: 999, padding: '7px 10px', cursor: 'pointer', fontSize: 11, fontWeight: 800 }}>
+                  {item.name} ×
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div style={{ color: C.soft, fontSize: 11, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 8 }}>오늘 사용한 앱</div>
+        <div style={{ display: 'grid', gap: 7 }}>
+          {available.length > 0 ? available.map(app => (
+            <button key={app.name} onClick={() => add(app.name)} disabled={saving === app.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: `1px solid ${C.border}`, background: C.surface, color: C.muted, borderRadius: 9, padding: '10px 12px', cursor: 'pointer', textAlign: 'left' }}>
+              <span style={{ color: C.white, fontSize: 12, fontWeight: 800 }}>{app.name}</span>
+              <span style={{ color: C.alt, fontFamily: "'JetBrains Mono', monospace", fontSize: 10 }}>{fmtMinutes(app.minutes)}</span>
+            </button>
+          )) : (
+            <div style={{ color: C.alt, fontSize: 12, padding: '16px 4px' }}>아직 선택할 앱 기록이 없습니다.</div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -412,15 +769,12 @@ function TimelinePage({ currentDay }: { currentDay: number }) {
   const d = rows.find((row) => row.day_number === sel) ?? rows[0]
   const rowByDay = new Map(rows.map((row) => [row.day_number, row]))
   const usageMinutes = (row?: TimelineEntry) => row ? row.pc_minutes + row.phone_minutes + row.focus_minutes + row.development_minutes + row.exercise_minutes : 0
-  const maxUsageMinutes = Math.max(1, ...rows.map((row) => usageMinutes(row)))
-  const heatColor = (minutes: number, future: boolean, today: boolean, selected: boolean) => {
+  const heatColor = (minutes: number, future: boolean) => {
     if (future) return '#111'
     if (minutes <= 0) return '#141414'
-    const ratio = minutes / maxUsageMinutes
-    if (today) return C.mint
-    if (ratio >= 0.75) return '#00e8c5'
-    if (ratio >= 0.5) return '#00bfa5'
-    if (ratio >= 0.25) return '#087d70'
+    if (minutes >= 360) return C.mint
+    if (minutes >= 240) return '#00bfa5'
+    if (minutes >= 120) return '#087d70'
     return '#15524d'
   }
   if (error) return <ErrorBlock message={error} />
@@ -450,7 +804,7 @@ function TimelinePage({ currentDay }: { currentDay: number }) {
                 <button key={n} onClick={() => !future && setSel(n)} style={{
                   aspectRatio: '1', borderRadius: 6, border: 'none',
                   cursor: future ? 'default' : 'pointer',
-                  background: heatColor(minutes, future, today, selected),
+                  background: heatColor(minutes, future),
                   color: future ? '#4a4a4a' : minutes > 0 && today ? C.ink : minutes > 0 ? C.white : C.faint,
                   fontSize: 11, fontFamily: "'JetBrains Mono', monospace",
                   fontWeight: today ? 700 : 400,
@@ -467,7 +821,7 @@ function TimelinePage({ currentDay }: { currentDay: number }) {
           </div>
           {/* legend */}
           <div style={{ display: 'flex', gap: 14, marginTop: 16, flexWrap: 'wrap' }}>
-            {[{ col: '#141414', lbl: '기록 없음' }, { col: '#15524d', lbl: '적음' }, { col: '#087d70', lbl: '보통' }, { col: '#00bfa5', lbl: '많음' }, { col: C.mint, lbl: '최대/오늘' }].map(l => (
+            {[{ col: '#141414', lbl: '기록 없음' }, { col: '#15524d', lbl: '2시간 미만' }, { col: '#087d70', lbl: '2~4시간' }, { col: '#00bfa5', lbl: '4~6시간' }, { col: C.mint, lbl: '6시간 이상' }].map(l => (
               <div key={l.lbl} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <div style={{ width: 8, height: 8, borderRadius: 2, background: l.col }} />
                 <span style={{ fontSize: 10, color: C.alt }}>{l.lbl}</span>
@@ -481,7 +835,7 @@ function TimelinePage({ currentDay }: { currentDay: number }) {
           <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 4 }}>선택한 날짜</div>
           <div style={{ fontSize: 34, fontWeight: 900, color: C.white, letterSpacing: '-0.03em', marginBottom: 18 }}>{sel}일차</div>
 
-          {d ? [['총 사용 시간', fmtMinutes(usageMinutes(d))], ['PC', fmtMinutes(d.pc_minutes)], ['휴대폰', fmtMinutes(d.phone_minutes)], ['공부', fmtMinutes(d.focus_minutes)], ['걸음', d.steps.toLocaleString()]].map(([k, v]) => (
+          {d ? [['총 사용 시간', fmtMinutes(usageMinutes(d))], ['PC', fmtMinutes(d.pc_minutes)], ['공부', fmtMinutes(d.focus_minutes)], ['개발', fmtMinutes(d.development_minutes)]].map(([k, v]) => (
             <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 0', borderBottom: `1px solid ${C.border}` }}>
               <span style={{ fontSize: 12, color: C.muted, fontWeight: 600 }}>{k}</span>
               <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: C.muted }}>{v}</span>
@@ -530,12 +884,12 @@ function AnalyticsPage() {
 
   const rows = data.rows
   const hasRows = rows.length > 0
-  const screenPc = rows.map((row) => row.pc_minutes / 60)
-  const screenPhone = rows.map((row) => row.phone_minutes / 60)
-  const focusData = rows.map((row) => row.focus_minutes / 60)
-  const stepsData = rows.map((row) => row.steps)
+  const screenPc = rows.map((row) => row.pc_minutes)
+  const focusData = rows.map((row) => row.focus_minutes)
+  const developmentData = rows.map((row) => row.development_minutes)
   const ghData = rows.map((row) => row.github_commits)
   const avg = (arr: number[]) => arr.length ? arr.reduce((a, v) => a + v, 0) / arr.length : 0
+  const chartMax = (arr: number[]) => Math.max(1, ...arr)
 
   const insights = buildInsights(rows)
 
@@ -543,7 +897,7 @@ function AnalyticsPage() {
   const apps = data.topApps.map((app, i) => ({
     name: app.name,
     pct: Math.round((app.minutes / maxAppMinutes) * 100),
-    hours: Math.round(app.minutes / 60),
+    time: fmtMinutes(app.minutes),
     color: i === 0 ? C.mint : '#2a2a2a',
   }))
 
@@ -569,30 +923,29 @@ function AnalyticsPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
         {/* Screen time */}
-        <ChartCard title="화면 시간" subtitle="PC vs 휴대폰 · 시간/일">
+        <ChartCard title="PC 시간" subtitle="일자별 사용 시간">
           <div style={{ display: 'flex', gap: 14, marginBottom: 12 }}>
             <Legend color={C.mint} label="PC" />
-            <Legend color="#3a3a3a" label="휴대폰" />
           </div>
-          {hasRows ? <DualLineChart a={screenPc} b={screenPhone} maxVal={10} colorA={C.mint} colorB="#4a4a4a" h={90} /> : <EmptyChart height={90} />}
+          {hasRows ? <BarChartSVG data={screenPc} maxVal={chartMax(screenPc)} color={C.mint} h={90} /> : <EmptyChart height={90} />}
         </ChartCard>
 
         {/* Focus */}
-        <ChartCard title="공부 시간" subtitle="시간 / 일">
+        <ChartCard title="공부 시간" subtitle="일자별 공부 시간">
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12 }}>
-            <span style={{ fontSize: 26, fontWeight: 800, color: C.white }}>{avg(focusData).toFixed(1)}시간</span>
+            <span style={{ fontSize: 26, fontWeight: 800, color: C.white }}>{fmtMinutes(avg(focusData))}</span>
             <span style={{ fontSize: 10, color: C.mint }}>평균</span>
           </div>
-          {hasRows ? <BarChartSVG data={focusData} maxVal={5} color={C.mint} h={90} /> : <EmptyChart height={90} />}
+          {hasRows ? <BarChartSVG data={focusData} maxVal={chartMax(focusData)} color={C.mint} h={90} /> : <EmptyChart height={90} />}
         </ChartCard>
 
-        {/* Steps */}
-        <ChartCard title="걸음 수" subtitle="일일 걸음 수">
+        {/* Development */}
+        <ChartCard title="개발 시간" subtitle="일자별 개발 시간">
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12 }}>
-            <span style={{ fontSize: 26, fontWeight: 800, color: C.white }}>{(avg(stepsData) / 1000).toFixed(1)}천</span>
+            <span style={{ fontSize: 26, fontWeight: 800, color: C.white }}>{fmtMinutes(avg(developmentData))}</span>
             <span style={{ fontSize: 10, color: C.mint }}>평균</span>
           </div>
-          {hasRows ? <BarChartSVG data={stepsData.map(v => v / 1000)} maxVal={10} color="#2a2a2a" accent={C.mint} h={90} /> : <EmptyChart height={90} />}
+          {hasRows ? <BarChartSVG data={developmentData} maxVal={chartMax(developmentData)} color={C.mintBright} h={90} /> : <EmptyChart height={90} />}
         </ChartCard>
       </div>
 
@@ -612,7 +965,7 @@ function AnalyticsPage() {
                   <AppIconMini name={a.name} />
                   <span style={{ fontSize: 12, color: C.muted }}>{a.name}</span>
                 </div>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.alt }}>{a.hours}시간</span>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.alt }}>{a.time}</span>
               </div>
               <div style={{ height: 3, background: C.border, borderRadius: 2 }}>
                 <div style={{ width: `${a.pct}%`, height: '100%', background: a.color, borderRadius: 2 }} />
@@ -669,11 +1022,11 @@ function buildInsights(rows: TimelineEntry[]) {
   const first = rows[0]
   const last = rows[rows.length - 1]
   const insights: { icon: string; text: string }[] = []
-  const phoneDiff = last.phone_minutes - first.phone_minutes
   const studyDiff = last.focus_minutes - first.focus_minutes
+  const devDiff = last.development_minutes - first.development_minutes
   const commitTotal = rows.reduce((sum, row) => sum + row.github_commits, 0)
-  if (phoneDiff !== 0) insights.push({ icon: phoneDiff < 0 ? '↓' : '↑', text: `기간 첫 기록 대비 휴대폰 사용이 ${fmtMinutes(Math.abs(phoneDiff))} ${phoneDiff < 0 ? '줄었습니다.' : '늘었습니다.'}` })
   if (studyDiff !== 0) insights.push({ icon: studyDiff > 0 ? '↑' : '↓', text: `기간 첫 기록 대비 공부 시간이 ${fmtMinutes(Math.abs(studyDiff))} ${studyDiff > 0 ? '늘었습니다.' : '줄었습니다.'}` })
+  if (devDiff !== 0) insights.push({ icon: devDiff > 0 ? '↑' : '↓', text: `기간 첫 기록 대비 개발 시간이 ${fmtMinutes(Math.abs(devDiff))} ${devDiff > 0 ? '늘었습니다.' : '줄었습니다.'}` })
   if (commitTotal > 0) insights.push({ icon: '•', text: `선택 기간에 GitHub 커밋 ${commitTotal}개가 기록됐습니다.` })
   return insights
 }
@@ -824,10 +1177,6 @@ function FocusPage({ currentDay }: { currentDay: number }) {
               />
               <button onClick={addCategory} style={{ padding: '0 14px', borderRadius: 8, border: 'none', background: C.chip, color: C.mint, cursor: 'pointer', fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12 }}>추가</button>
             </div>
-            <input value={note} onChange={e => setNote(e.target.value)}
-              placeholder="노트북/휴대폰 없이 하는 일을 적어두기"
-              style={{ width: '100%', marginTop: 10, padding: '10px 12px', background: C.raised, border: `1px solid ${C.border2}`, borderRadius: 8, color: C.white, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, outline: 'none' }}
-            />
           </div>
         )}
 
@@ -883,19 +1232,30 @@ function FocusPage({ currentDay }: { currentDay: number }) {
 /* ═══════════════════════════════════════════════
    DEVICES
 ═══════════════════════════════════════════════ */
-function DevicesPage() {
+function DevicesPage({ autoPairComputer, onAutoPairHandled }: { autoPairComputer?: boolean; onAutoPairHandled?: () => void }) {
   const [qr, setQr] = useState(false)
   const [devices, setDevices] = useState<DeviceData[]>([])
   const [pairing, setPairing] = useState<DevicePairingData | null>(null)
   const [pendingDevice, setPendingDevice] = useState<{ kind: string; name: string; platform: string } | null>(null)
   const [error, setError] = useState('')
+  const [copied, setCopied] = useState(false)
+  const [connectToken, setConnectToken] = useState('')
+  const [lockedDevice, setLockedDevice] = useState<{ title: string; description: string } | null>(null)
+  const desktopShell = isDesktopShell()
 
   const refresh = () => api.devices().then(setDevices).catch((err) => setError(err.message))
 
   useEffect(() => { refresh() }, [])
 
+  useEffect(() => {
+    if (!autoPairComputer) return
+    onAutoPairHandled?.()
+    startPairing({ kind: 'computer', name: '노트북 트래커', platform: 'Windows' })
+  }, [autoPairComputer])
+
   const startPairing = async (device: { kind: string; name: string; platform: string }) => {
     setError('')
+    setCopied(false)
     setPendingDevice(device)
     try {
       const created = await api.createDevicePairing(device)
@@ -906,6 +1266,13 @@ function DevicesPage() {
     }
   }
 
+  const copyPairingToken = async () => {
+    if (!pairing?.token) return
+    await navigator.clipboard.writeText(pairing.token)
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 1400)
+  }
+
   const completePairing = async () => {
     if (!pairing) return
     setError('')
@@ -914,6 +1281,22 @@ function DevicesPage() {
       setQr(false)
       setPairing(null)
       setPendingDevice(null)
+      await refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '기기 연결 실패')
+    }
+  }
+
+  const connectWithToken = async () => {
+    const token = connectToken.trim()
+    if (!token) {
+      setError('연결 코드를 입력하세요')
+      return
+    }
+    setError('')
+    try {
+      await api.connectDevice({ token })
+      setConnectToken('')
       await refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : '기기 연결 실패')
@@ -943,11 +1326,57 @@ function DevicesPage() {
     sync: shortTime(device.last_sync),
     Illu: illustration(device.kind),
   }))
+  const pairingGuide = (() => {
+    if (pendingDevice?.kind === 'computer') {
+      return {
+        title: '노트북 연결 코드',
+        description: '아래 명령을 한 번 실행하면 현재 로그인한 계정에 연결되고 Windows 시작 시 자동 실행됩니다.',
+        command: pairing ? windowsTrackerCommand(pairing.token) : '',
+      }
+    }
+    if (pendingDevice?.kind === 'phone') {
+      return {
+        title: '휴대폰 연결 코드',
+        description: 'Android 연동 앱에서 이 코드를 입력하고 사용정보 접근 권한을 허용하면 휴대폰 사용 기록이 이 계정에 저장됩니다.',
+        command: '',
+      }
+    }
+    return {
+      title: '기기 연결 코드',
+      description: '다른 기기에서 이 코드를 입력하면 현재 로그인한 계정에 연결됩니다.',
+      command: '',
+    }
+  })()
 
   return (
     <div style={{ padding: '32px 36px' }}>
       <div style={{ fontSize: 32, fontWeight: 900, color: C.white, letterSpacing: '-0.02em', marginBottom: 28 }}>연결된 기기</div>
       {error && <div style={{ color: C.mintMuted, fontSize: 12, marginBottom: 16 }}>{error}</div>}
+
+      {!desktopShell && <div style={{ background: 'linear-gradient(135deg, rgba(0,232,197,0.12), rgba(26,26,26,1) 42%, rgba(13,13,13,1))', borderRadius: 16, padding: '26px', border: `1px solid rgba(0,232,197,0.18)`, marginBottom: 18, display: 'grid', gridTemplateColumns: '1fr auto', gap: 24, alignItems: 'center' }}>
+        <div>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '5px 8px', borderRadius: 7, background: 'rgba(0,232,197,0.1)', border: `1px solid rgba(0,232,197,0.16)`, marginBottom: 12 }}>
+            <IcoDevice c={C.mint} />
+            <span style={{ fontSize: 10, color: C.mint, fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, letterSpacing: '0.08em' }}>HARUFIT DESKTOP</span>
+          </div>
+          <div style={{ fontSize: 24, fontWeight: 900, color: C.white, letterSpacing: '-0.03em', marginBottom: 8 }}>Windows 앱 설치</div>
+          <div style={{ fontSize: 12, color: C.alt, lineHeight: 1.8, maxWidth: 620 }}>
+            하루핏 PC 앱은 현재 보고 있는 앱과 창 제목을 자동 기록합니다. 설치 후 로그인만 하면 PC 시간, 앱 사용량, 개발 시간이 계정에 저장됩니다.
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
+            {['활성 앱 측정', '유휴 시간 제외', '백그라운드 동기화'].map((label) => (
+              <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 10px', borderRadius: 999, background: 'rgba(0,0,0,0.24)', border: `1px solid ${C.border}` }}>
+                <span style={{ width: 5, height: 5, borderRadius: 99, background: C.mint }} />
+                <span style={{ fontSize: 10, color: C.muted, fontWeight: 700 }}>{label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{ display: 'grid', gap: 10, minWidth: 210 }}>
+          <a href={windowsInstallerUrl()} style={{ textDecoration: 'none', textAlign: 'center', padding: '13px 20px', borderRadius: 999, background: C.mint, color: C.ink, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 13, fontWeight: 900, boxShadow: '0 16px 34px rgba(0,232,197,0.14)' }}>Windows 다운로드</a>
+          <button onClick={() => startPairing({ kind: 'computer', name: '노트북 트래커', platform: 'Windows' })} style={{ padding: '10px 18px', borderRadius: 999, border: `1px solid ${C.border2}`, background: 'rgba(0,0,0,0.18)', color: C.muted, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 11, fontWeight: 800, cursor: 'pointer' }}>명령어로 연결</button>
+        </div>
+      </div>}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14, marginBottom: 32 }}>
         {connected.map((d) => (
@@ -970,22 +1399,67 @@ function DevicesPage() {
         ))}
       </div>
 
+      <div style={{ background: C.raised, borderRadius: 14, padding: '22px', border: `1px solid ${C.border}`, marginBottom: 14 }}>
+        <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 14 }}>다른 기기 코드로 연결</div>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'stretch', flexWrap: 'wrap' }}>
+          <input
+            value={connectToken}
+            onChange={(event) => setConnectToken(event.target.value)}
+            placeholder="연결 코드 입력"
+            style={{
+              flex: '1 1 260px',
+              minWidth: 0,
+              padding: '12px 14px',
+              borderRadius: 10,
+              border: `1px solid ${C.border2}`,
+              background: C.surface,
+              color: C.white,
+              outline: 'none',
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 13,
+            }}
+          />
+          <button
+            onClick={connectWithToken}
+            style={{
+              flex: '0 0 auto',
+              padding: '0 18px',
+              minHeight: 44,
+              borderRadius: 10,
+              border: 'none',
+              background: C.mint,
+              color: C.ink,
+              fontFamily: "'Pretendard', system-ui, sans-serif",
+              fontSize: 13,
+              fontWeight: 800,
+              cursor: 'pointer',
+            }}
+          >
+            연결
+          </button>
+        </div>
+      </div>
+
       <div style={{ background: C.raised, borderRadius: 14, padding: '22px', border: `1px solid ${C.border}` }}>
-        <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 18 }}>추가 연결</div>
+        <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 18 }}>계정에 기기 추가</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
           {[
-            { label: '트래커 설치', sub: 'macOS / Windows', kind: 'computer', name: '데스크톱 트래커', platform: 'macOS / Windows', Illu: () => <IlluLaptop dim /> },
-            { label: 'Android 앱', sub: '연동 앱', kind: 'phone', name: 'Android 앱', platform: 'Android', Illu: () => <IlluPhone  dim /> },
-            { label: 'Health Connect', sub: 'Wear OS', kind: 'watch', name: 'Health Connect', platform: 'Wear OS', Illu: () => <IlluWatch  dim /> },
-            { label: 'GitHub', sub: 'OAuth 연결', kind: 'github', name: 'GitHub', platform: 'GitHub OAuth', Illu: () => <IlluGit dim /> },
+            { label: 'PC/노트북 연결', sub: 'Windows 시간 측정', kind: 'computer', name: '노트북 트래커', platform: 'Windows', Illu: () => <IlluLaptop dim /> },
+            { label: '휴대폰 연결', sub: 'v2 Android 앱 필요', kind: 'phone', locked: true, lockText: '휴대폰 사용시간은 웹에서 읽을 수 없어서 Android 앱과 Usage Access 권한이 필요합니다.', Illu: () => <IlluPhone dim /> },
+            { label: '태블릿 연결', sub: 'v2 Android/iPad 앱 필요', kind: 'tablet', locked: true, lockText: '태블릿 사용시간도 OS 권한이 필요해서 v2 네이티브 앱에서 연결합니다.', Illu: () => <IlluPhone dim /> },
+            { label: '워치 연결', sub: 'v2 Health Connect 필요', kind: 'watch', locked: true, lockText: '워치는 휴대폰 앱이 Health Connect 권한을 받아 걸음과 운동 데이터를 가져오는 방식으로 연결합니다.', Illu: () => <IlluWatch dim /> },
           ].map((item) => (
-            <button key={item.label} onClick={() => startPairing(item)} style={{
+            <button key={item.label} onClick={() => item.locked ? setLockedDevice({ title: item.label, description: item.lockText || '' }) : startPairing(item)} style={{
               padding: '16px', background: C.surface, borderRadius: 12,
-              border: `1px dashed ${C.border2}`, cursor: 'pointer', textAlign: 'left',
+              border: `1px dashed ${item.locked ? C.border : C.border2}`, cursor: 'pointer', textAlign: 'left',
+              opacity: item.locked ? 0.62 : 1,
               transition: 'border-color 120ms',
             }}>
               <div style={{ marginBottom: 10 }}><item.Illu /></div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 2, fontFamily: "'Pretendard', system-ui, sans-serif" }}>{item.label}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: C.muted, fontFamily: "'Pretendard', system-ui, sans-serif" }}>{item.label}</div>
+                {item.locked && <div style={{ fontSize: 9, color: C.mint, border: `1px solid ${C.border2}`, borderRadius: 5, padding: '2px 5px', fontFamily: "'JetBrains Mono', monospace" }}>v2</div>}
+              </div>
               <div style={{ fontSize: 10, color: '#3a3a3a', fontFamily: "'Pretendard', system-ui, sans-serif" }}>{item.sub}</div>
             </button>
           ))}
@@ -994,23 +1468,52 @@ function DevicesPage() {
 
       {qr && (
         <div onClick={() => setQr(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: C.raised, borderRadius: 20, padding: '36px', border: `1px solid ${C.border2}`, textAlign: 'center', maxWidth: 320 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: C.white, marginBottom: 6 }}>{pendingDevice?.name || '기기'} 연결</div>
-            <div style={{ fontSize: 11, color: C.alt, marginBottom: 24, lineHeight: 1.9 }}>
-              연결 코드가 10분 동안 유효합니다.<br />
-              외부 트래커 앱은 이 코드를 `/api/devices/connect`로 전송하면 됩니다.
+          <div onClick={e => e.stopPropagation()} style={{ background: C.raised, borderRadius: 20, padding: '34px', border: `1px solid ${C.border2}`, textAlign: 'left', maxWidth: 430, width: 'calc(100% - 32px)' }}>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.white, marginBottom: 8 }}>{pairingGuide.title}</div>
+            <div style={{ fontSize: 12, color: C.alt, marginBottom: 22, lineHeight: 1.8 }}>
+              {pairingGuide.description}<br />
+              연결 코드는 10분 동안 유효합니다.
             </div>
             <div style={{ background: C.surface, borderRadius: 12, padding: '14px 16px', marginBottom: 20, border: `1px solid ${C.border2}` }}>
               <div style={{ fontFamily: "'JetBrains Mono', monospace", color: C.mint, fontSize: 18, fontWeight: 800, wordBreak: 'break-all' }}>{pairing?.token || '생성 중'}</div>
               <div style={{ fontSize: 10, color: C.alt, marginTop: 8 }}>{pairing ? new Date(pairing.expires_at).toLocaleTimeString('ko-KR') : ''} 만료</div>
             </div>
+            {pairingGuide.command && (
+              <div style={{ background: '#0b0b0b', border: `1px solid ${C.border}`, borderRadius: 10, padding: 12, marginBottom: 18 }}>
+                <div style={{ fontSize: 10, color: C.alt, marginBottom: 8 }}>노트북에서 실행</div>
+                <div style={{ fontFamily: "'JetBrains Mono', monospace", color: C.muted, fontSize: 11, lineHeight: 1.6, wordBreak: 'break-all' }}>{pairingGuide.command}</div>
+              </div>
+            )}
             <div style={{ fontSize: 10, color: C.alt, fontFamily: "'JetBrains Mono', monospace", marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
               <PulsingDot />&nbsp;기기 연결 대기 중...
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => setQr(false)} style={{ flex: 1, padding: '9px 14px', borderRadius: 8, border: `1px solid ${C.border2}`, background: 'transparent', color: C.alt, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, cursor: 'pointer' }}>취소</button>
-              <button onClick={completePairing} style={{ flex: 1, padding: '9px 14px', borderRadius: 8, border: 'none', background: C.mint, color: C.ink, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>이 기기로 연결</button>
+              <button onClick={copyPairingToken} style={{ flex: 1, padding: '9px 14px', borderRadius: 8, border: `1px solid ${C.border2}`, background: C.surface, color: C.muted, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>{copied ? '복사됨' : '코드 복사'}</button>
+              <button onClick={completePairing} style={{ flex: 1, padding: '9px 14px', borderRadius: 8, border: 'none', background: C.mint, color: C.ink, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>현재 기기로 테스트</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {lockedDevice && (
+        <div onClick={() => setLockedDevice(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: C.raised, borderRadius: 20, padding: '34px', border: `1px solid ${C.border2}`, textAlign: 'left', maxWidth: 430, width: 'calc(100% - 32px)' }}>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.white, marginBottom: 8 }}>{lockedDevice.title}</div>
+            <div style={{ color: C.alt, fontSize: 12, lineHeight: 1.8, marginBottom: 18 }}>{lockedDevice.description}</div>
+            <div style={{ display: 'grid', gap: 10, marginBottom: 22 }}>
+              {[
+                'v1에서는 PC/노트북 Windows 트래커부터 실제 측정합니다.',
+                '휴대폰, 태블릿, 워치는 OS 권한이 필요한 네이티브 앱 기능으로 분리합니다.',
+                'v2 앱에서 권한 승인 후 이 계정으로 자동 기록을 전송합니다.',
+              ].map((text, index) => (
+                <div key={text} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px 14px' }}>
+                  <div style={{ width: 22, height: 22, borderRadius: 7, background: 'rgba(0,232,197,0.12)', color: C.mint, fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{index + 1}</div>
+                  <div style={{ color: C.muted, fontSize: 12, lineHeight: 1.7 }}>{text}</div>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setLockedDevice(null)} style={{ width: '100%', padding: '11px 14px', borderRadius: 10, border: 'none', background: C.mint, color: C.ink, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>확인</button>
           </div>
         </div>
       )}
@@ -1034,33 +1537,21 @@ function ResultPage() {
 
   const summaryData = data.rows.map((row) => row.focus_minutes / 60)
   const hasRows = data.rows.length > 0
-  const trackedMinutes = data.totals.pc_minutes + data.totals.phone_minutes + data.totals.focus_minutes + data.totals.development_minutes + data.totals.exercise_minutes
+  const trackedMinutes = data.totals.pc_minutes + data.totals.focus_minutes + data.totals.development_minutes
   const totalHours = Math.round(trackedMinutes / 60)
   const activityTotals = [
     { label: 'PC 사용', minutes: data.totals.pc_minutes, color: C.mint },
-    { label: '휴대폰 사용', minutes: data.totals.phone_minutes, color: C.faint },
     { label: '공부', minutes: data.totals.focus_minutes, color: C.mintBright },
     { label: '개발', minutes: data.totals.development_minutes, color: C.mint },
-    { label: '운동', minutes: data.totals.exercise_minutes, color: C.mintMuted },
   ]
   const maxActivityMinutes = Math.max(1, ...activityTotals.map((item) => item.minutes))
   const activityStats = [
     ...activityTotals.map((item) => ({ label: item.label, val: fmtMinutes(item.minutes), pct: Math.round((item.minutes / maxActivityMinutes) * 100), color: item.color })),
-    { label: '걸음', val: `${data.totals.steps.toLocaleString()}보`, pct: 0, color: C.white },
     { label: 'GitHub', val: `${data.totals.github_commits.toLocaleString()}커밋`, pct: 0, color: C.mint },
   ]
-  const pct = (first: number, last: number, invert = false) => {
-    const delta = first ? Math.round(((last - first) / first) * 100) : 0
-    const good = invert ? delta <= 0 : delta >= 0
-    return { delta: `${delta >= 0 ? '↑' : '↓'} ${Math.abs(delta)}%`, good }
-  }
-  const phone = pct(data.first.phone_minutes, data.last.phone_minutes, true)
-  const focus = pct(data.first.focus_minutes, data.last.focus_minutes)
-  const dev = pct(data.first.development_minutes, data.last.development_minutes)
   const compare = [
-    { label: '휴대폰 사용량', d1: fmtMinutes(data.first.phone_minutes), d100: fmtMinutes(data.last.phone_minutes), ...phone },
-    { label: '공부 시간', d1: fmtMinutes(data.first.focus_minutes), d100: fmtMinutes(data.last.focus_minutes), ...focus },
-    { label: '개발 시간', d1: fmtMinutes(data.first.development_minutes), d100: fmtMinutes(data.last.development_minutes), ...dev },
+    { label: '공부 시간', d1: fmtMinutes(data.first.focus_minutes), d100: fmtMinutes(data.last.focus_minutes) },
+    { label: '개발 시간', d1: fmtMinutes(data.first.development_minutes), d100: fmtMinutes(data.last.development_minutes) },
   ]
 
   return (
@@ -1119,7 +1610,6 @@ function ResultPage() {
                   <div style={{ fontSize: 17, fontWeight: 800, color: C.white }}>{c.d100}</div>
                 </div>
               </div>
-              <div style={{ fontSize: 22, fontWeight: 900, color: c.good ? C.mint : C.faint, letterSpacing: '-0.01em' }}>{c.delta}</div>
             </div>
           ))}
         </div>

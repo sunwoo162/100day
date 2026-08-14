@@ -33,8 +33,8 @@ Node.js 22.5 이상을 권장합니다. (`node:sqlite` 사용)
 
 ```bash
 cd C:\Users\user\Documents\100day
-npm install
-npm run dev
+pnpm install
+pnpm run dev
 ```
 
 실행 후:
@@ -87,7 +87,7 @@ docker compose up -d --build
 
 ## DB / 실제 기록 데이터
 
-`npm run dev` 또는 `npm run dev:api`를 처음 실행하면 `server/data/100days.db`가 자동 생성됩니다. DB에는 목데이터를 넣지 않고, 기본 100일 챌린지와 공부 카테고리만 준비합니다.
+`pnpm run dev` 또는 `pnpm run dev:api`를 처음 실행하면 `server/data/100days.db`가 자동 생성됩니다. DB에는 목데이터를 넣지 않고, 기본 100일 챌린지와 공부 카테고리만 준비합니다.
 
 앱에서 직접 기록하면 다음 데이터가 저장됩니다.
 
@@ -99,7 +99,7 @@ SQLite DB 파일(`server/data/*.db`)은 `.gitignore`에 포함되어 GitHub에 �
 DB를 초기화하고 실제 기록을 모두 비우려면:
 
 ```bash
-npm run db:reset
+pnpm run db:reset
 ```
 
 또는 `server/data/100days.db`를 직접 삭제한 후 서버를 다시 실행해도 됩니다. 이 경우에도 목데이터는 생성되지 않습니다.
@@ -114,6 +114,11 @@ GET  /api/dashboard/today?day=1
 GET  /api/timeline
 GET  /api/analytics?days=30
 GET  /api/devices
+POST /api/devices/pairing
+POST /api/devices/connect
+POST /api/track/pc
+POST /api/track/phone
+POST /api/track/health
 GET  /api/study/categories
 POST /api/study/categories
 GET  /api/focus/sessions
@@ -134,12 +139,34 @@ GET  /api/result
 }
 ```
 
-## 이후 실제 디바이스 연결
+## 디바이스 자동 기록
 
-현재 앱은 목데이터 없이 실제 저장된 기록만 표시합니다. 아직 자동 수집기가 없는 항목은 0 또는 빈 목록으로 표시되며, 이후 각각의 수집기가 같은 API/DB 모델로 데이터를 보내도록 연결합니다.
+현재 앱은 목데이터 없이 실제 저장된 기록만 표시합니다. PC/노트북은 Windows 트래커로 실제 측정하며, 휴대폰/태블릿/워치는 네이티브 앱이 필요한 수집 계약을 서버에 준비해 둡니다.
 
 1. Windows Desktop Tracker → PC/app usage
 2. Chrome Extension → website usage
 3. Android Companion → UsageStats
 4. Health Connect → steps/exercise/watch data
 5. GitHub OAuth/API → commit/PR activity
+
+### Windows PC 사용 시간 트래커
+
+앱의 `기기` 화면에서 `트래커 설치`를 눌러 연결 코드를 만든 뒤 실행합니다.
+
+```powershell
+pnpm run tracker:windows -- -PairingToken 연결코드
+```
+
+이후에는 저장된 기기 토큰으로 계속 실행할 수 있습니다.
+
+```powershell
+pnpm run tracker:windows
+```
+
+트래커는 1분마다 현재 활성 창을 확인하고, 3분 이상 입력이 없으면 유휴 상태로 보고 기록하지 않습니다.
+
+### Android 휴대폰 사용 시간 연동
+
+휴대폰 사용 시간은 모바일 웹에서 직접 읽을 수 없습니다. Android 연동 앱이 Usage Access 권한을 받은 뒤 하루핏 연결 코드를 `/api/devices/connect`로 등록해야 합니다.
+
+등록 후 Android 앱은 발급받은 기기 토큰으로 `/api/track/phone`에 앱별 사용 시간을 전송합니다.

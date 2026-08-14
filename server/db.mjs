@@ -83,6 +83,16 @@ CREATE TABLE IF NOT EXISTS app_usage (
   source TEXT NOT NULL,
   app_name TEXT NOT NULL,
   minutes INTEGER NOT NULL DEFAULT 0,
+  occurred_at TEXT,
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS app_classifications (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  app_name TEXT NOT NULL,
+  category TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE(user_id, app_name, category),
   FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS timeline_events (
@@ -101,6 +111,7 @@ CREATE TABLE IF NOT EXISTS devices (
   name TEXT NOT NULL,
   platform TEXT NOT NULL,
   status TEXT NOT NULL,
+  device_token TEXT UNIQUE,
   last_sync TEXT,
   source TEXT,
   FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -142,6 +153,7 @@ for (const [table, definition] of [
   ['challenges', 'user_id INTEGER'],
   ['daily_metrics', 'user_id INTEGER'],
   ['app_usage', 'user_id INTEGER'],
+  ['app_classifications', 'user_id INTEGER'],
   ['timeline_events', 'user_id INTEGER'],
   ['devices', 'user_id INTEGER'],
   ['focus_sessions', 'user_id INTEGER'],
@@ -149,6 +161,11 @@ for (const [table, definition] of [
 ]) {
   const columns = db.prepare(`PRAGMA table_info(${table})`).all().map(column => column.name)
   if (!columns.includes('user_id')) db.exec(`ALTER TABLE ${table} ADD COLUMN ${definition}`)
+}
+
+{
+  const columns = db.prepare('PRAGMA table_info(app_usage)').all().map(column => column.name)
+  if (!columns.includes('occurred_at')) db.exec('ALTER TABLE app_usage ADD COLUMN occurred_at TEXT')
 }
 
 const studyCategorySql = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'study_categories'").get()?.sql || ''
@@ -171,6 +188,10 @@ if (studyCategorySql.includes('name TEXT NOT NULL UNIQUE')) {
 
 const focusColumns = db.prepare('PRAGMA table_info(focus_sessions)').all().map(column => column.name)
 if (!focusColumns.includes('note')) db.exec("ALTER TABLE focus_sessions ADD COLUMN note TEXT NOT NULL DEFAULT ''")
+
+const deviceColumns = db.prepare('PRAGMA table_info(devices)').all().map(column => column.name)
+if (!deviceColumns.includes('device_token')) db.exec('ALTER TABLE devices ADD COLUMN device_token TEXT')
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_devices_device_token ON devices(device_token)')
 
 if (db.prepare('SELECT COUNT(*) AS count FROM challenges').get().count === 0) {
   db.prepare('INSERT INTO challenges (id, user_id, name, start_date, target_days) VALUES (1, NULL, ?, ?, 100)')
