@@ -87,9 +87,8 @@ jobs:
             grep -q '^GITHUB_CLIENT_ID=' .env || { echo "GITHUB_CLIENT_ID is missing"; exit 1; }
             grep -q '^GITHUB_CLIENT_SECRET=' .env || { echo "GITHUB_CLIENT_SECRET is missing"; exit 1; }
 
-            corepack enable
-            pnpm install --frozen-lockfile
-            pnpm run build
+            corepack pnpm install --frozen-lockfile
+            corepack pnpm run build
 
             if command -v pm2 >/dev/null 2>&1; then
               pm2 delete harufit 2>/dev/null || true
