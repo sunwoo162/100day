@@ -30,6 +30,8 @@ jobs:
 
       - name: Build Windows installer
         run: pnpm run dist:desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
