@@ -5,6 +5,10 @@ on:
   push:
     branches: [develop]
 
+concurrency:
+  group: harufit-deploy
+  cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -83,9 +87,8 @@ jobs:
             grep -q '^GITHUB_CLIENT_ID=' .env || { echo "GITHUB_CLIENT_ID is missing"; exit 1; }
             grep -q '^GITHUB_CLIENT_SECRET=' .env || { echo "GITHUB_CLIENT_SECRET is missing"; exit 1; }
 
-            corepack enable
-            pnpm install --frozen-lockfile
-            pnpm run build
+            corepack pnpm install --frozen-lockfile
+            corepack pnpm run build
 
             if command -v pm2 >/dev/null 2>&1; then
               pm2 delete harufit 2>/dev/null || true
@@ -103,3 +106,14 @@ jobs:
             fi
 
             sudo systemctl reload nginx 2>/dev/null || true
+
+            for i in $(seq 1 20); do
+              if curl -fsS "$HARUFIT_API_ORIGIN/api/health" >/dev/null; then
+                echo "Harufit health check passed"
+                exit 0
+              fi
+              sleep 3
+            done
+
+            echo "Harufit health check failed"
+            exit 1

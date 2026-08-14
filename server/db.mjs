@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import './env.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const dataDir = path.join(__dirname, 'data')
+const dataDir = process.env.HARUFIT_DATA_DIR || path.join(__dirname, 'data')
 fs.mkdirSync(dataDir, { recursive: true })
 const dbPath = path.join(dataDir, '100days.db')
 
