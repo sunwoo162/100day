@@ -975,7 +975,7 @@ function AnalyticsPage() {
           <div style={{ display: 'flex', gap: 14, marginBottom: 12 }}>
             <Legend color={C.mint} label="PC" />
           </div>
-          {hasRows ? <BarChartSVG data={screenPc} maxVal={chartMax(screenPc)} color={C.mint} h={90} /> : <EmptyChart height={90} />}
+          {hasRows ? <LineChartSVG data={screenPc} maxVal={chartMax(screenPc)} color={C.mint} h={90} /> : <EmptyChart height={90} />}
         </ChartCard>
 
         {/* Focus */}
@@ -984,7 +984,7 @@ function AnalyticsPage() {
             <span style={{ fontSize: 26, fontWeight: 800, color: C.white }}>{fmtMinutes(avg(focusData))}</span>
             <span style={{ fontSize: 10, color: C.mint }}>평균</span>
           </div>
-          {hasRows ? <BarChartSVG data={focusData} maxVal={chartMax(focusData)} color={C.mint} h={90} /> : <EmptyChart height={90} />}
+          {hasRows ? <LineChartSVG data={focusData} maxVal={chartMax(focusData)} color={C.mint} h={90} /> : <EmptyChart height={90} />}
         </ChartCard>
 
         {/* Development */}
@@ -993,7 +993,7 @@ function AnalyticsPage() {
             <span style={{ fontSize: 26, fontWeight: 800, color: C.white }}>{fmtMinutes(avg(developmentData))}</span>
             <span style={{ fontSize: 10, color: C.mint }}>평균</span>
           </div>
-          {hasRows ? <BarChartSVG data={developmentData} maxVal={chartMax(developmentData)} color={C.mintBright} h={90} /> : <EmptyChart height={90} />}
+          {hasRows ? <LineChartSVG data={developmentData} maxVal={chartMax(developmentData)} color={C.mintBright} h={90} /> : <EmptyChart height={90} />}
         </ChartCard>
       </div>
 
@@ -1719,6 +1719,62 @@ function DualLineChart({ a, b, maxVal, colorA, colorB, h }: { a: number[]; b: nu
     <svg width="100%" viewBox={`0 0 ${W} ${h}`} preserveAspectRatio="none" style={{ display: 'block', height: h }}>
       <polyline points={pts(a)} fill="none" stroke={colorA} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
       <polyline points={pts(b)} fill="none" stroke={colorB} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function LineChartSVG({ data, maxVal, color, h }: { data: number[]; maxVal: number; color: string; h: number }) {
+  if (!data.length) return <EmptyChart height={h} />
+  const W = 300
+  const padX = 5
+  const padY = 8
+  const chartW = W - padX * 2
+  const chartH = h - padY * 2
+  const denom = Math.max(1, data.length - 1)
+  const max = Math.max(1, maxVal)
+  const points = data.map((v, i) => {
+    const x = padX + (i / denom) * chartW
+    const y = padY + chartH - (v / max) * chartH
+    return { x, y, v }
+  })
+  const line = points.map((p) => `${p.x},${p.y}`).join(' ')
+  const active = points.filter((p) => p.v > 0)
+
+  return (
+    <svg width="100%" viewBox={`0 0 ${W} ${h}`} preserveAspectRatio="none" style={{ display: 'block', height: h }}>
+      {[0, 0.5, 1].map((tick) => (
+        <line
+          key={tick}
+          x1={padX}
+          x2={W - padX}
+          y1={padY + chartH * tick}
+          y2={padY + chartH * tick}
+          stroke="rgba(255,255,255,0.06)"
+          strokeWidth="1"
+          vectorEffect="non-scaling-stroke"
+        />
+      ))}
+      <polyline
+        points={line}
+        fill="none"
+        stroke={color}
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        vectorEffect="non-scaling-stroke"
+      />
+      {active.map((p, i) => (
+        <circle
+          key={`${p.x}-${i}`}
+          cx={p.x}
+          cy={p.y}
+          r={i === active.length - 1 ? 3.2 : 2.4}
+          fill={C.raised}
+          stroke={color}
+          strokeWidth="2"
+          vectorEffect="non-scaling-stroke"
+        />
+      ))}
     </svg>
   )
 }
