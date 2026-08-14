@@ -406,11 +406,6 @@ function Sidebar({ page, setPage, open, setOpen, currentDay, user, onLogout, onR
 
       {/* Bottom */}
       <div style={{ padding: '10px 10px 24px', borderTop: `1px solid ${C.border}` }}>
-        {!isDesktopShell() && (
-          <a href={windowsInstallerUrl()} style={{ display: 'block', textDecoration: 'none', textAlign: 'center', margin: '0 10px 12px', padding: '9px 10px', borderRadius: 8, border: 'none', background: C.mint, color: C.ink, cursor: 'pointer', fontSize: 11, fontWeight: 900 }}>
-            앱 설치하기
-          </a>
-        )}
         <div style={{ padding: '8px 10px 14px', marginBottom: 8, borderBottom: `1px solid ${C.border}` }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             {user.avatarUrl ? <img src={user.avatarUrl} alt="" style={{ width: 24, height: 24, borderRadius: '50%' }} /> : <div style={{ width: 24, height: 24, borderRadius: '50%', background: C.chip }} />}
@@ -659,15 +654,21 @@ function DashboardPage({ user, setPage, currentDay, onConnectDevice }: { user: A
         </div>
       </div>
 
-      {/* Study CTA */}
+      {/* Bottom CTA */}
       <div style={{ marginTop: 16, background: 'linear-gradient(135deg, rgba(0,232,197,0.06) 0%, rgba(0,232,197,0.02) 100%)', borderRadius: 14, padding: '18px 24px', border: `1px solid rgba(0,232,197,0.12)`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 2 }}>공부 기록</div>
-          <div style={{ fontSize: 11, color: C.alt }}>노트북/휴대폰 없이 하는 일을 타이머로 저장하세요.</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 2 }}>{desktopShell ? '공부 기록' : '앱 설치하기'}</div>
+          <div style={{ fontSize: 11, color: C.alt }}>{desktopShell ? '노트북/휴대폰 없이 하는 일을 타이머로 저장하세요.' : 'Windows 앱을 설치하면 PC 사용 시간과 앱 사용량이 자동으로 기록됩니다.'}</div>
         </div>
-        <button onClick={() => setPage('focus')} style={{ padding: '9px 20px', borderRadius: 50, background: C.mint, color: C.ink, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, fontWeight: 700, border: 'none', cursor: 'pointer', letterSpacing: '0.04em' }}>
-          Start →
-        </button>
+        {desktopShell ? (
+          <button onClick={() => setPage('focus')} style={{ padding: '9px 20px', borderRadius: 50, background: C.mint, color: C.ink, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, fontWeight: 700, border: 'none', cursor: 'pointer', letterSpacing: '0.04em' }}>
+            Start →
+          </button>
+        ) : (
+          <a href={windowsInstallerUrl()} style={{ textDecoration: 'none', padding: '9px 20px', borderRadius: 50, background: C.mint, color: C.ink, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, fontWeight: 800, letterSpacing: '0.02em' }}>
+            설치하기 →
+          </a>
+        )}
       </div>
       {appPicker && data && (
         <AppPickerModal
