@@ -655,21 +655,39 @@ function DashboardPage({ user, setPage, currentDay, onConnectDevice }: { user: A
       </div>
 
       {/* Bottom CTA */}
-      <div style={{ marginTop: 16, background: 'linear-gradient(135deg, rgba(0,232,197,0.06) 0%, rgba(0,232,197,0.02) 100%)', borderRadius: 14, padding: '18px 24px', border: `1px solid rgba(0,232,197,0.12)`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 2 }}>{desktopShell ? '공부 기록' : '앱 설치하기'}</div>
-          <div style={{ fontSize: 11, color: C.alt }}>{desktopShell ? '노트북/휴대폰 없이 하는 일을 타이머로 저장하세요.' : 'Windows 앱을 설치하면 PC 사용 시간과 앱 사용량이 자동으로 기록됩니다.'}</div>
-        </div>
-        {desktopShell ? (
+      {desktopShell ? (
+        <div style={{ marginTop: 16, background: 'linear-gradient(135deg, rgba(0,232,197,0.06) 0%, rgba(0,232,197,0.02) 100%)', borderRadius: 14, padding: '18px 24px', border: `1px solid rgba(0,232,197,0.12)`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 2 }}>공부 기록</div>
+            <div style={{ fontSize: 11, color: C.alt }}>노트북/휴대폰 없이 하는 일을 타이머로 저장하세요.</div>
+          </div>
           <button onClick={() => setPage('focus')} style={{ padding: '9px 20px', borderRadius: 50, background: C.mint, color: C.ink, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, fontWeight: 700, border: 'none', cursor: 'pointer', letterSpacing: '0.04em' }}>
             Start →
           </button>
-        ) : (
-          <a href={windowsInstallerUrl()} style={{ textDecoration: 'none', padding: '9px 20px', borderRadius: 50, background: C.mint, color: C.ink, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, fontWeight: 800, letterSpacing: '0.02em' }}>
-            설치하기 →
-          </a>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div style={{ marginTop: 16, background: 'linear-gradient(135deg, rgba(0,232,197,0.12), rgba(26,26,26,1) 42%, rgba(13,13,13,1))', borderRadius: 16, padding: '26px', border: `1px solid rgba(0,232,197,0.18)`, display: 'grid', gridTemplateColumns: '1fr auto', gap: 24, alignItems: 'center' }}>
+          <div>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '5px 8px', borderRadius: 7, background: 'rgba(0,232,197,0.1)', border: `1px solid rgba(0,232,197,0.16)`, marginBottom: 12 }}>
+              <IcoDevice c={C.mint} />
+              <span style={{ fontSize: 10, color: C.mint, fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, letterSpacing: '0.08em' }}>HARUFIT DESKTOP</span>
+            </div>
+            <div style={{ fontSize: 24, fontWeight: 900, color: C.white, letterSpacing: '-0.03em', marginBottom: 8 }}>Windows 앱 설치</div>
+            <div style={{ fontSize: 12, color: C.alt, lineHeight: 1.8, maxWidth: 620 }}>
+              하루핏 PC 앱은 현재 보고 있는 앱과 창 제목을 자동 기록합니다. 설치 후 로그인만 하면 PC 시간, 앱 사용량, 개발 시간이 계정에 저장됩니다.
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
+              {['활성 앱 측정', '유휴 시간 제외', '백그라운드 동기화'].map((label) => (
+                <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 10px', borderRadius: 999, background: 'rgba(0,0,0,0.24)', border: `1px solid ${C.border}` }}>
+                  <span style={{ width: 5, height: 5, borderRadius: 99, background: C.mint }} />
+                  <span style={{ fontSize: 10, color: C.muted, fontWeight: 700 }}>{label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <a href={windowsInstallerUrl()} style={{ textDecoration: 'none', textAlign: 'center', padding: '13px 20px', borderRadius: 999, background: C.mint, color: C.ink, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 13, fontWeight: 900, boxShadow: '0 16px 34px rgba(0,232,197,0.14)', minWidth: 210 }}>Windows 다운로드</a>
+        </div>
+      )}
       {appPicker && data && (
         <AppPickerModal
           category={appPicker}
