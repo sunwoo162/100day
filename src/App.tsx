@@ -170,12 +170,14 @@ function useDesktopOpenPrompt() {
 
   const openDesktopApp = () => {
     let appOpened = false
+    let frame: HTMLIFrameElement | null = null
     const markOpened = () => {
       appOpened = true
     }
     const cleanup = () => {
       window.removeEventListener('blur', markOpened)
       document.removeEventListener('visibilitychange', onVisibilityChange)
+      if (frame?.parentNode) frame.parentNode.removeChild(frame)
     }
     const onVisibilityChange = () => {
       if (document.hidden) markOpened()
@@ -183,7 +185,11 @@ function useDesktopOpenPrompt() {
 
     window.addEventListener('blur', markOpened, { once: true })
     document.addEventListener('visibilitychange', onVisibilityChange)
-    window.location.href = desktopOpenUrl()
+    frame = document.createElement('iframe')
+    frame.style.display = 'none'
+    frame.setAttribute('aria-hidden', 'true')
+    frame.src = desktopOpenUrl()
+    document.body.appendChild(frame)
 
     window.setTimeout(() => {
       cleanup()
