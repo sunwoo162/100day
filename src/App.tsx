@@ -108,6 +108,20 @@ function goalMinutesToInput(minutes: number) {
   return `${Math.floor(safe / 60)}:${String(safe % 60).padStart(2, '0')}`
 }
 
+function formatChartDateLabel(dateText: string) {
+  const date = new Date(`${dateText}T00:00:00`)
+  if (Number.isNaN(date.getTime())) return dateText.slice(5).replace('-', '/')
+  return `${date.getMonth() + 1}/${date.getDate()}`
+}
+
+function formatChartTickMinutes(minutes: number) {
+  if (minutes >= 60) {
+    const hours = minutes / 60
+    return Number.isInteger(hours) ? `${hours}h` : `${hours.toFixed(1)}h`
+  }
+  return `${Math.round(minutes)}m`
+}
+
 function parseHourValue(display: string) {
   const hours = display.match(/(\d+)h/)?.[1] ?? '0'
   const mins = display.match(/(\d+)m/)?.[1] ?? '0'
@@ -924,6 +938,7 @@ function AnalyticsPage() {
   const screenPc = rows.map((row) => row.pc_minutes)
   const focusData = rows.map((row) => row.focus_minutes)
   const developmentData = rows.map((row) => row.development_minutes)
+  const dateLabels = rows.map((row) => formatChartDateLabel(row.date))
   const ghData = rows.map((row) => row.github_commits)
   const avg = (arr: number[]) => arr.length ? arr.reduce((a, v) => a + v, 0) / arr.length : 0
   const chartMax = (arr: number[]) => Math.max(1, ...arr)
@@ -964,7 +979,7 @@ function AnalyticsPage() {
           <div style={{ display: 'flex', gap: 14, marginBottom: 12 }}>
             <Legend color={C.mint} label="PC" />
           </div>
-          {hasRows ? <LineChartSVG data={screenPc} maxVal={chartMax(screenPc)} color={C.mint} h={90} /> : <EmptyChart height={90} />}
+          {hasRows ? <LineChartSVG data={screenPc} labels={dateLabels} maxVal={chartMax(screenPc)} color={C.mint} h={150} /> : <EmptyChart height={150} />}
         </ChartCard>
 
         {/* Focus */}
@@ -973,7 +988,7 @@ function AnalyticsPage() {
             <span style={{ fontSize: 26, fontWeight: 800, color: C.white }}>{fmtMinutes(avg(focusData))}</span>
             <span style={{ fontSize: 10, color: C.mint }}>평균</span>
           </div>
-          {hasRows ? <LineChartSVG data={focusData} maxVal={chartMax(focusData)} color={C.mint} h={90} /> : <EmptyChart height={90} />}
+          {hasRows ? <LineChartSVG data={focusData} labels={dateLabels} maxVal={chartMax(focusData)} color={C.mint} h={150} /> : <EmptyChart height={150} />}
         </ChartCard>
 
         {/* Development */}
@@ -982,7 +997,7 @@ function AnalyticsPage() {
             <span style={{ fontSize: 26, fontWeight: 800, color: C.white }}>{fmtMinutes(avg(developmentData))}</span>
             <span style={{ fontSize: 10, color: C.mint }}>평균</span>
           </div>
-          {hasRows ? <LineChartSVG data={developmentData} maxVal={chartMax(developmentData)} color={C.mintBright} h={90} /> : <EmptyChart height={90} />}
+          {hasRows ? <LineChartSVG data={developmentData} labels={dateLabels} maxVal={chartMax(developmentData)} color={C.mintBright} h={150} /> : <EmptyChart height={150} />}
         </ChartCard>
       </div>
 
@@ -1752,37 +1767,57 @@ function DualLineChart({ a, b, maxVal, colorA, colorB, h }: { a: number[]; b: nu
   )
 }
 
-function LineChartSVG({ data, maxVal, color, h }: { data: number[]; maxVal: number; color: string; h: number }) {
+function LineChartSVG({ data, labels, maxVal, color, h }: { data: number[]; labels?: string[]; maxVal: number; color: string; h: number }) {
   if (!data.length) return <EmptyChart height={h} />
-  const W = 300
-  const padX = 5
-  const padY = 8
-  const chartW = W - padX * 2
-  const chartH = h - padY * 2
+  const W = 420
+  const padLeft = 36
+  const padRight = 8
+  const padTop = 10
+  const padBottom = 24
+  const chartW = W - padLeft - padRight
+  const chartH = h - padTop - padBottom
   const denom = Math.max(1, data.length - 1)
   const max = Math.max(1, maxVal)
   const points = data.map((v, i) => {
-    const x = padX + (i / denom) * chartW
-    const y = padY + chartH - (v / max) * chartH
+    const x = padLeft + (i / denom) * chartW
+    const y = padTop + chartH - (v / max) * chartH
     return { x, y, v }
   })
   const line = points.map((p) => `${p.x},${p.y}`).join(' ')
   const active = points.filter((p) => p.v > 0)
+  const yTicks = [max, max / 2, 0]
+  const labelStep = Math.max(1, Math.ceil(data.length / 6))
 
   return (
     <svg width="100%" viewBox={`0 0 ${W} ${h}`} preserveAspectRatio="none" style={{ display: 'block', height: h }}>
-      {[0, 0.5, 1].map((tick) => (
-        <line
-          key={tick}
-          x1={padX}
-          x2={W - padX}
-          y1={padY + chartH * tick}
-          y2={padY + chartH * tick}
-          stroke="rgba(255,255,255,0.06)"
-          strokeWidth="1"
-          vectorEffect="non-scaling-stroke"
-        />
-      ))}
+      {yTicks.map((tick) => {
+        const y = padTop + chartH - (tick / max) * chartH
+        return (
+          <g key={tick}>
+            <line
+              x1={padLeft}
+              x2={W - padRight}
+              y1={y}
+              y2={y}
+              stroke="rgba(255,255,255,0.08)"
+              strokeWidth="1"
+              vectorEffect="non-scaling-stroke"
+            />
+            <text x={padLeft - 8} y={y + 3} textAnchor="end" fill={C.alt} fontSize="9" fontFamily="'JetBrains Mono', monospace">
+              {formatChartTickMinutes(tick)}
+            </text>
+          </g>
+        )
+      })}
+      {points.map((p, i) => {
+        const show = i === 0 || i === points.length - 1 || i % labelStep === 0
+        if (!show) return null
+        return (
+          <text key={`label-${i}`} x={p.x} y={h - 5} textAnchor="middle" fill={C.alt} fontSize="9" fontFamily="'JetBrains Mono', monospace">
+            {labels?.[i] ?? String(i + 1)}
+          </text>
+        )
+      })}
       <polyline
         points={line}
         fill="none"
