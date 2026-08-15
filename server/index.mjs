@@ -36,32 +36,91 @@ const API_ORIGIN = process.env.API_ORIGIN || `http://localhost:${PORT}`
 const WINDOWS_INSTALLER_PATH = process.env.HARUFIT_WINDOWS_INSTALLER_PATH || path.join(rootDir, 'desktop-release', latestWindowsInstallerName())
 const SESSION_COOKIE = 'sid'
 const SESSION_DAYS = Number(process.env.SESSION_DAYS || 365)
+const isProduction = API_ORIGIN.startsWith('https://') || WEB_ORIGIN.startsWith('https://')
+const allowedOrigins = new Set([WEB_ORIGIN, API_ORIGIN].filter(Boolean).map(origin => origin.replace(/\/$/, '')))
 
-function json(res, status, data, headers = {}) {
+function securityHeaders(extra = {}) {
+  return {
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()',
+    ...extra,
+  }
+}
+
+function corsHeaders(req) {
+  const origin = String(req?.headers?.origin || '').replace(/\/$/, '')
+  const allowOrigin = allowedOrigins.has(origin) ? origin : WEB_ORIGIN
+  return {
+    'Access-Control-Allow-Origin': allowOrigin,
+    'Access-Control-Allow-Credentials': 'true',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS',
+    'Vary': 'Origin',
+  }
+}
+
+function isTrustedRequestOrigin(req) {
+  const origin = String(req.headers.origin || '').replace(/\/$/, '')
+  if (origin) return allowedOrigins.has(origin)
+  const referer = String(req.headers.referer || '')
+  if (!referer) return true
+  try {
+    return allowedOrigins.has(new URL(referer).origin.replace(/\/$/, ''))
+  } catch {
+    return false
+  }
+}
+
+function json(reqOrRes, resOrStatus, statusOrData, dataOrHeaders, maybeHeaders = {}) {
+  const hasReq = Boolean(reqOrRes?.headers && resOrStatus?.writeHead)
+  const req = hasReq ? reqOrRes : null
+  const res = hasReq ? resOrStatus : reqOrRes
+  const status = hasReq ? statusOrData : resOrStatus
+  const data = hasReq ? dataOrHeaders : statusOrData
+  const headers = hasReq ? maybeHeaders : dataOrHeaders || {}
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
-    'Access-Control-Allow-Origin': WEB_ORIGIN,
-    'Access-Control-Allow-Credentials': 'true',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS',
+    ...securityHeaders(corsHeaders(req)),
     ...headers,
   })
   res.end(JSON.stringify(data))
 }
-function redirect(res, location, cookies = []) {
+function redirect(reqOrRes, resOrLocation, locationOrCookies, maybeCookies = []) {
+  const hasReq = Boolean(reqOrRes?.headers && resOrLocation?.writeHead)
+  const req = hasReq ? reqOrRes : null
+  const res = hasReq ? resOrLocation : reqOrRes
+  const location = hasReq ? locationOrCookies : resOrLocation
+  const cookies = hasReq ? maybeCookies : locationOrCookies || []
   res.writeHead(302, {
     Location: location,
     'Set-Cookie': cookies,
-    'Access-Control-Allow-Origin': WEB_ORIGIN,
-    'Access-Control-Allow-Credentials': 'true',
+    ...securityHeaders(corsHeaders(req)),
   })
   res.end()
 }
 function readBody(req) {
   return new Promise((resolve, reject) => {
     let data = ''
-    req.on('data', c => data += c)
-    req.on('end', () => { try { resolve(data ? JSON.parse(data) : {}) } catch (e) { reject(e) } })
+    req.on('data', c => {
+      data += c
+      if (data.length > 65536) {
+        const error = new Error('요청 본문이 너무 큽니다')
+        error.statusCode = 413
+        reject(error)
+        req.destroy()
+      }
+    })
+    req.on('end', () => {
+      try {
+        resolve(data ? JSON.parse(data) : {})
+      } catch {
+        const error = new Error('JSON 형식이 올바르지 않습니다')
+        error.statusCode = 400
+        reject(error)
+      }
+    })
   })
 }
 const contentTypes = {
@@ -77,14 +136,21 @@ const contentTypes = {
 }
 function staticFile(res, filePath) {
   const ext = path.extname(filePath)
-  res.writeHead(200, { 'Content-Type': contentTypes[ext] || 'application/octet-stream' })
+  res.writeHead(200, securityHeaders({ 'Content-Type': contentTypes[ext] || 'application/octet-stream' }))
   fs.createReadStream(filePath).pipe(res)
 }
-function downloadFile(res, filePath, filename, contentType = 'application/octet-stream') {
-  if (!fs.existsSync(filePath)) return json(res, 404, { error: '다운로드 파일을 찾을 수 없습니다' })
+function downloadFile(reqOrRes, resOrFilePath, filePathOrFilename, filenameOrContentType, maybeContentType = 'application/octet-stream') {
+  const hasReq = Boolean(reqOrRes?.headers && resOrFilePath?.writeHead)
+  const req = hasReq ? reqOrRes : null
+  const res = hasReq ? resOrFilePath : reqOrRes
+  const filePath = hasReq ? filePathOrFilename : resOrFilePath
+  const filename = hasReq ? filenameOrContentType : filePathOrFilename
+  const contentType = hasReq ? maybeContentType : filenameOrContentType || 'application/octet-stream'
+  if (!fs.existsSync(filePath)) return json(req, res, 404, { error: '다운로드 파일을 찾을 수 없습니다' })
   res.writeHead(200, {
     'Content-Type': contentType,
     'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    ...securityHeaders(corsHeaders(req)),
   })
   return fs.createReadStream(filePath).pipe(res)
 }
@@ -98,14 +164,19 @@ function latestWindowsInstallerName() {
   return installers[0]?.name || '하루핏 Setup 0.1.2.exe'
 }
 function serveStatic(req, res, url) {
-  if (!['GET', 'HEAD'].includes(req.method || '')) return json(res, 405, { error: '허용되지 않는 메서드입니다' })
-  const rawPath = decodeURIComponent(url.pathname === '/' ? '/index.html' : url.pathname)
-  const requested = path.normalize(path.join(distDir, rawPath))
-  if (!requested.startsWith(distDir)) return json(res, 403, { error: '잘못된 경로입니다' })
+  if (!['GET', 'HEAD'].includes(req.method || '')) return json(req, res, 405, { error: '허용되지 않는 메서드입니다' })
+  let rawPath = ''
+  try {
+    rawPath = decodeURIComponent(url.pathname === '/' ? '/index.html' : url.pathname)
+  } catch {
+    return json(req, res, 400, { error: '잘못된 경로입니다' })
+  }
+  const requested = path.resolve(distDir, `.${rawPath}`)
+  if (requested !== distDir && !requested.startsWith(`${distDir}${path.sep}`)) return json(req, res, 403, { error: '잘못된 경로입니다' })
   const filePath = fs.existsSync(requested) && fs.statSync(requested).isFile() ? requested : path.join(distDir, 'index.html')
-  if (!fs.existsSync(filePath)) return json(res, 404, { error: '빌드된 프론트엔드가 없습니다. npm run build를 실행하세요.' })
+  if (!fs.existsSync(filePath)) return json(req, res, 404, { error: '빌드된 프론트엔드가 없습니다. npm run build를 실행하세요.' })
   if (req.method === 'HEAD') {
-    res.writeHead(200, { 'Content-Type': contentTypes[path.extname(filePath)] || 'application/octet-stream' })
+    res.writeHead(200, securityHeaders({ 'Content-Type': contentTypes[path.extname(filePath)] || 'application/octet-stream' }))
     return res.end()
   }
   return staticFile(res, filePath)
@@ -196,10 +267,10 @@ function parseCookies(req) {
   }).filter(([key]) => key))
 }
 function sessionCookie(token, expires) {
-  return `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Expires=${expires.toUTCString()}`
+  return `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Expires=${expires.toUTCString()}${isProduction ? '; Secure' : ''}`
 }
 function clearSessionCookie() {
-  return `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`
+  return `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${isProduction ? '; Secure' : ''}`
 }
 function publicUser(user) {
   if (!user) return null
@@ -370,18 +441,24 @@ function upsertOAuthUser({ provider, providerUserId, email, name, avatarUrl }) {
 }
 
 const server = http.createServer(async (req, res) => {
-  if (req.method === 'OPTIONS') return json(res, 204, {})
-  const url = new URL(req.url, `http://${req.headers.host}`)
+  if (!['GET', 'HEAD'].includes(req.method || '') && !isTrustedRequestOrigin(req)) return json(req, res, 403, { error: '허용되지 않은 요청 출처입니다' })
+  if (req.method === 'OPTIONS') return json(req, res, 204, {})
+  let url
+  try {
+    url = new URL(req.url, `http://${req.headers.host || 'localhost'}`)
+  } catch {
+    return json(req, res, 400, { error: '잘못된 URL입니다' })
+  }
   try {
     if (url.pathname === '/api/health') return json(res, 200, { ok: true, database: dbPath })
 
     if (url.pathname === '/downloads/windows-pc-tracker.ps1' && req.method === 'GET') {
       const trackerPath = path.join(rootDir, 'scripts', 'windows-pc-tracker.ps1')
-      return downloadFile(res, trackerPath, 'windows-pc-tracker.ps1', 'text/plain; charset=utf-8')
+      return downloadFile(req, res, trackerPath, 'windows-pc-tracker.ps1', 'text/plain; charset=utf-8')
     }
 
     if (url.pathname === '/downloads/harufit-windows' && req.method === 'GET') {
-      return downloadFile(res, WINDOWS_INSTALLER_PATH, path.basename(WINDOWS_INSTALLER_PATH))
+      return downloadFile(req, res, WINDOWS_INSTALLER_PATH, path.basename(WINDOWS_INSTALLER_PATH))
     }
 
     if (url.pathname === '/api/auth/me') {
@@ -395,8 +472,7 @@ const server = http.createServer(async (req, res) => {
       if (token) db.prepare('DELETE FROM sessions WHERE token = ?').run(token)
       res.writeHead(204, {
         'Set-Cookie': clearSessionCookie(),
-        'Access-Control-Allow-Origin': WEB_ORIGIN,
-        'Access-Control-Allow-Credentials': 'true',
+        ...securityHeaders(corsHeaders(req)),
       })
       return res.end()
     }
@@ -413,7 +489,7 @@ const server = http.createServer(async (req, res) => {
       authUrl.searchParams.set('response_type', 'code')
       authUrl.searchParams.set('scope', config.scope)
       authUrl.searchParams.set('state', state)
-      return redirect(res, authUrl.toString(), [`oauth_state=${state}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600`])
+      return redirect(req, res, authUrl.toString(), [`oauth_state=${state}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600${isProduction ? '; Secure' : ''}`])
     }
 
     const authCallback = url.pathname.match(/^\/api\/auth\/(github|google)\/callback$/)
@@ -426,15 +502,15 @@ const server = http.createServer(async (req, res) => {
         const accessToken = await exchangeCode(provider, code)
         const user = upsertOAuthUser(await fetchOAuthProfile(provider, accessToken))
         const session = createSession(user.id)
-        return redirect(res, `${WEB_ORIGIN}/`, [
+        return redirect(req, res, `${WEB_ORIGIN}/`, [
           sessionCookie(session.token, session.expires),
-          'oauth_state=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0',
+          `oauth_state=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${isProduction ? '; Secure' : ''}`,
         ])
       } catch (error) {
         console.error(`${provider} OAuth callback failed:`, error)
         const reason = authErrorReason(error)
-        return redirect(res, `${WEB_ORIGIN}/?auth=failed&provider=${provider}&reason=${reason}`, [
-          'oauth_state=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0',
+        return redirect(req, res, `${WEB_ORIGIN}/?auth=failed&provider=${provider}&reason=${reason}`, [
+          `oauth_state=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${isProduction ? '; Secure' : ''}`,
         ])
       }
     }
@@ -497,7 +573,7 @@ const server = http.createServer(async (req, res) => {
       const user = requireUser(req, res); if (!user) return
       db.prepare('DELETE FROM app_classifications WHERE user_id = ? AND app_name = ? AND category = ?')
         .run(user.id, decodeURIComponent(deleteClassification[1]), deleteClassification[2])
-      res.writeHead(204, { 'Access-Control-Allow-Origin': WEB_ORIGIN, 'Access-Control-Allow-Credentials': 'true' })
+      res.writeHead(204, securityHeaders(corsHeaders(req)))
       return res.end()
     }
 
@@ -566,12 +642,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (url.pathname === '/api/track/browser' && req.method === 'POST') {
-      const user = requireUser(req, res); if (!user) return
-      const body = await readBody(req)
-      const minutes = Math.max(0, Math.min(30, Number(body.minutes || 0)))
-      if (!minutes) return json(res, 400, { error: 'minutes 값이 필요합니다' })
-      const appName = String(body.app_name || '하루핏 웹').trim().slice(0, 120) || '하루핏 웹'
-      return json(res, 201, { ok: true, ...recordPcUsage(user.id, 'browser', appName, minutes) })
+      return json(req, res, 403, { error: '웹에서는 사용 시간을 기록할 수 없습니다' })
     }
 
     if (url.pathname === '/api/track/desktop' && req.method === 'POST') {
@@ -709,7 +780,7 @@ const server = http.createServer(async (req, res) => {
     return serveStatic(req, res, url)
   } catch (error) {
     console.error(error)
-    return json(res, 500, { error: error.message })
+    return json(req, res, error.statusCode || 500, { error: error.message })
   }
 })
 

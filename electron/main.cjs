@@ -13,6 +13,13 @@ const productionAppUrl = process.env.HARUFIT_WEB_ORIGIN || 'https://harufit.http
 const baseAppUrl = devServerUrl || productionAppUrl
 const apiBaseUrl = (process.env.HARUFIT_API_ORIGIN || `${baseAppUrl.replace(/\/$/, '')}/api`).replace(/\/$/, '')
 const appCookieUrl = baseAppUrl.replace(/\/$/, '')
+const trustedOrigins = new Set([baseAppUrl, apiBaseUrl].map((value) => {
+  try {
+    return new URL(value).origin
+  } catch {
+    return ''
+  }
+}).filter(Boolean))
 const desktopSessionPartition = 'persist:harufit'
 const children = new Set()
 let desktopTrackerProcess = null
@@ -38,6 +45,24 @@ function withDesktopFlag(url) {
   parsed.searchParams.set('desktop', '1')
   parsed.searchParams.set('appVersion', packageJson.version || '0')
   return parsed.toString()
+}
+
+function isTrustedAppUrl(url) {
+  try {
+    const parsed = new URL(url)
+    return ['http:', 'https:'].includes(parsed.protocol) && trustedOrigins.has(parsed.origin)
+  } catch {
+    return false
+  }
+}
+
+function isSafeExternalUrl(url) {
+  try {
+    const parsed = new URL(url)
+    return ['http:', 'https:'].includes(parsed.protocol)
+  } catch {
+    return false
+  }
 }
 
 function logDesktop(message) {
@@ -310,8 +335,18 @@ function createWindow() {
   })
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url)
+    if (isSafeExternalUrl(url)) shell.openExternal(url)
     return { action: 'deny' }
+  })
+
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (isTrustedAppUrl(url)) return
+    event.preventDefault()
+    if (isSafeExternalUrl(url)) shell.openExternal(url)
+  })
+
+  session.fromPartition(desktopSessionPartition).setPermissionRequestHandler((_webContents, _permission, callback) => {
+    callback(false)
   })
 
   mainWindow.webContents.on('page-title-updated', (event) => {
