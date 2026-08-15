@@ -40,6 +40,10 @@ if (!gotSingleInstanceLock) {
   app.quit()
 }
 
+function shouldStartHidden() {
+  return process.argv.some((arg) => ['--hidden', '--background', '--processStart', '--process-start'].includes(arg))
+}
+
 function withDesktopFlag(url) {
   const parsed = new URL(url)
   parsed.searchParams.set('desktop', '1')
@@ -317,12 +321,14 @@ async function loadWhenReady(win, url, attempts = 30) {
   await win.loadURL(url)
 }
 
-function createWindow() {
+function createWindow(options = {}) {
+  const startHidden = Boolean(options.hidden)
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 820,
     minWidth: 960,
     minHeight: 640,
+    show: !startHidden,
     title: '하루핏',
     icon: iconPath,
     backgroundColor: '#0d0d0d',
@@ -380,17 +386,20 @@ function createWindow() {
     mainWindow = null
   })
 
-  loadWhenReady(mainWindow, withDesktopFlag(baseAppUrl))
+  loadWhenReady(mainWindow, withDesktopFlag(baseAppUrl)).then(() => {
+    if (startHidden && mainWindow && !mainWindow.isDestroyed()) mainWindow.hide()
+  })
 }
 
 app.whenReady().then(async () => {
+  const startHidden = shouldStartHidden()
   enableAutoLaunch()
   if (devServerUrl) startApiServer()
   await clearStaleWebCache()
   await migrateLegacySessionCookie()
   startDesktopTrackerAfterLogin()
   createTray()
-  createWindow()
+  createWindow({ hidden: startHidden })
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
