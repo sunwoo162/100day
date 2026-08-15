@@ -283,34 +283,6 @@ export default function App() {
     api.challenge().then(setChallenge).catch(() => setChallenge(null))
   }, [user])
 
-  useEffect(() => {
-    if (!user) return
-    if (isDesktopShell()) return
-    let lastSentAt = Date.now()
-    const sendBrowserUsage = () => {
-      if (document.hidden) {
-        lastSentAt = Date.now()
-        return
-      }
-      const now = Date.now()
-      const minutes = Math.min(0.5, Math.max(0, (now - lastSentAt) / 60000))
-      lastSentAt = now
-      if (minutes < 0.05) return
-      api.trackBrowser({ minutes, app_name: browserUsageName() }).catch(() => {})
-    }
-    const interval = window.setInterval(sendBrowserUsage, 15000)
-    const onVisibilityChange = () => {
-      if (document.hidden) sendBrowserUsage()
-      else lastSentAt = Date.now()
-    }
-    document.addEventListener('visibilitychange', onVisibilityChange)
-    return () => {
-      window.clearInterval(interval)
-      document.removeEventListener('visibilitychange', onVisibilityChange)
-      sendBrowserUsage()
-    }
-  }, [user])
-
   const logout = async () => {
     await api.logout().catch(() => {})
     setUser(null)
