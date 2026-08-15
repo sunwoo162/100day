@@ -304,7 +304,7 @@ function PublicDownloadPage() {
           </div>
         </header>
 
-        <main style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(360px, 520px)', gap: 'clamp(28px, 6vw, 76px)', alignItems: 'center', padding: '46px 0 36px' }}>
+        <main className="public-download-layout" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(360px, 520px)', gap: 'clamp(28px, 6vw, 76px)', alignItems: 'center', padding: '46px 0 36px' }}>
           <section>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 9px', borderRadius: 8, background: 'rgba(0,232,197,0.1)', border: `1px solid rgba(0,232,197,0.16)`, marginBottom: 18 }}>
               <IcoDevice c={C.mint} />
@@ -644,7 +644,7 @@ function DashboardPage({ user, setPage, currentDay, onConnectDevice }: { user: A
   const devPcts = deviceTotal > 0 ? [1] : [0]
 
   return (
-    <div style={{ padding: '32px 36px' }}>
+    <div className="page-shell" style={{ padding: '32px 36px' }}>
       {/* Header */}
       <div style={{ marginBottom: 36 }}>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 12 }}>
@@ -675,7 +675,7 @@ function DashboardPage({ user, setPage, currentDay, onConnectDevice }: { user: A
           <a href={desktopOpenUrl()} style={{ textDecoration: 'none', padding: '9px 14px', borderRadius: 999, background: C.mint, color: C.ink, fontSize: 11, fontWeight: 900, whiteSpace: 'nowrap' }}>앱 열기</a>
         </div>
       )}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 28 }}>
+      <div className="dashboard-stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 28 }}>
         {stats.map((s) => (
           <div key={s.id} style={{ background: C.raised, borderRadius: 14, padding: '18px 18px 14px', border: `1px solid ${C.border}` }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center', marginBottom: 10 }}>
@@ -694,7 +694,7 @@ function DashboardPage({ user, setPage, currentDay, onConnectDevice }: { user: A
       </div>
 
       {/* Lower row */}
-      <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr 1fr', gap: 16 }}>
+      <div className="dashboard-lower-grid" style={{ display: 'grid', gridTemplateColumns: '220px 1fr 1fr', gap: 16 }}>
         {/* Device ring */}
         <div style={{ background: C.raised, borderRadius: 14, padding: '20px', border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           <div style={{ fontSize: 11, color: C.soft, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 16, alignSelf: 'flex-start', fontWeight: 700 }}>기기</div>
@@ -764,7 +764,7 @@ function DashboardPage({ user, setPage, currentDay, onConnectDevice }: { user: A
           </button>
         </div>
       ) : (
-        <div style={{ marginTop: 16, background: 'linear-gradient(135deg, rgba(0,232,197,0.12), rgba(26,26,26,1) 42%, rgba(13,13,13,1))', borderRadius: 16, padding: '26px', border: `1px solid rgba(0,232,197,0.18)`, display: 'grid', gridTemplateColumns: '1fr auto', gap: 24, alignItems: 'center' }}>
+        <div className="desktop-install-card" style={{ marginTop: 16, background: 'linear-gradient(135deg, rgba(0,232,197,0.12), rgba(26,26,26,1) 42%, rgba(13,13,13,1))', borderRadius: 16, padding: '26px', border: `1px solid rgba(0,232,197,0.18)`, display: 'grid', gridTemplateColumns: '1fr auto', gap: 24, alignItems: 'center' }}>
           <div>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '5px 8px', borderRadius: 7, background: 'rgba(0,232,197,0.1)', border: `1px solid rgba(0,232,197,0.16)`, marginBottom: 12 }}>
               <IcoDevice c={C.mint} />
@@ -913,7 +913,7 @@ function TimelinePage({ currentDay }: { currentDay: number }) {
   if (error) return <ErrorBlock message={error} />
 
   return (
-    <div style={{ padding: '32px 36px' }}>
+    <div className="page-shell" style={{ padding: '32px 36px' }}>
       <div style={{ marginBottom: 28 }}>
         <div style={{ fontSize: 44, fontWeight: 900, color: C.white, letterSpacing: '-0.03em', lineHeight: 1 }}>하루핏</div>
         <div style={{ display: 'flex', gap: 20, marginTop: 8 }}>
@@ -926,7 +926,7 @@ function TimelinePage({ currentDay }: { currentDay: number }) {
         {/* Grid */}
         <div style={{ background: C.raised, borderRadius: 14, padding: '24px', border: `1px solid ${C.border}` }}>
           <div style={{ fontSize: 10, color: '#4a4a4a', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 16 }}>전체 날짜</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: 6 }}>
+          <div className="hundred-day-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: 6 }}>
             {Array.from({ length: 100 }, (_, i) => i + 1).map((n) => {
               const row = rowByDay.get(n)
               const minutes = usageMinutes(row)
@@ -1036,7 +1036,7 @@ function AnalyticsPage() {
   }))
 
   return (
-    <div style={{ padding: '32px 36px' }}>
+    <div className="page-shell" style={{ padding: '32px 36px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28, flexWrap: 'wrap', gap: 12 }}>
         <span style={{ fontSize: 32, fontWeight: 900, color: C.white, letterSpacing: '-0.02em' }}>분석</span>
         <div style={{ display: 'flex', gap: 3, background: C.raised, borderRadius: 8, padding: 3, border: `1px solid ${C.border}` }}>
@@ -1055,7 +1055,7 @@ function AnalyticsPage() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+      <div className="analytics-chart-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
         {/* Screen time */}
         <ChartCard title="PC 시간" subtitle="일자별 사용 시간">
           <div style={{ display: 'flex', gap: 14, marginBottom: 12 }}>
@@ -1089,7 +1089,7 @@ function AnalyticsPage() {
         {hasRows ? <GithubHeatmap data={ghData} /> : <EmptyChart height={54} />}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      <div className="analytics-chart-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
         {/* App usage */}
         <ChartCard title="상위 앱" subtitle={`총 ${fmtMinutes(totalAppMinutes)} 중 비율`}>
           {apps.length ? apps.map(a => (
@@ -1293,7 +1293,7 @@ function FocusPage({ currentDay }: { currentDay: number }) {
   }
 
   return (
-    <div style={{ padding: '40px 36px', maxWidth: 600, margin: '0 auto' }}>
+    <div className="page-shell focus-shell" style={{ padding: '40px 36px', maxWidth: 600, margin: '0 auto' }}>
       {error && <div style={{ color: C.mintMuted, fontSize: 12, marginBottom: 16 }}>{error}</div>}
       {/* Big timer */}
       <div style={{ textAlign: 'center', marginBottom: 40 }}>
@@ -1523,11 +1523,11 @@ function DevicesPage({ autoPairComputer, onAutoPairHandled }: { autoPairComputer
   })()
 
   return (
-    <div style={{ padding: '32px 36px' }}>
+    <div className="page-shell" style={{ padding: '32px 36px' }}>
       <div style={{ fontSize: 32, fontWeight: 900, color: C.white, letterSpacing: '-0.02em', marginBottom: 28 }}>연결된 기기</div>
       {error && <div style={{ color: C.mintMuted, fontSize: 12, marginBottom: 16 }}>{error}</div>}
 
-      {!desktopShell && <div style={{ background: 'linear-gradient(135deg, rgba(0,232,197,0.12), rgba(26,26,26,1) 42%, rgba(13,13,13,1))', borderRadius: 16, padding: '26px', border: `1px solid rgba(0,232,197,0.18)`, marginBottom: 18, display: 'grid', gridTemplateColumns: '1fr auto', gap: 24, alignItems: 'center' }}>
+      {!desktopShell && <div className="desktop-install-card" style={{ background: 'linear-gradient(135deg, rgba(0,232,197,0.12), rgba(26,26,26,1) 42%, rgba(13,13,13,1))', borderRadius: 16, padding: '26px', border: `1px solid rgba(0,232,197,0.18)`, marginBottom: 18, display: 'grid', gridTemplateColumns: '1fr auto', gap: 24, alignItems: 'center' }}>
         <div>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '5px 8px', borderRadius: 7, background: 'rgba(0,232,197,0.1)', border: `1px solid rgba(0,232,197,0.16)`, marginBottom: 12 }}>
             <IcoDevice c={C.mint} />
@@ -1729,7 +1729,7 @@ function ResultPage() {
   ]
 
   return (
-    <div style={{ padding: '48px 40px' }}>
+    <div className="page-shell result-shell" style={{ padding: '48px 40px' }}>
       {/* Hero */}
       <div style={{ textAlign: 'center', marginBottom: 64 }}>
         <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.alt, letterSpacing: '0.3em', marginBottom: 16 }}>하루핏</div>

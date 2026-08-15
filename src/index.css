@@ -56,6 +56,9 @@ body {
 .scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
 
 @media (max-width: 768px) {
+  body {
+    overflow-x: hidden;
+  }
   aside {
     position: fixed !important;
     top: 0;
@@ -72,5 +75,61 @@ body {
   }
   .timeline-layout {
     grid-template-columns: 1fr !important;
+  }
+  .page-shell {
+    padding: 22px 18px 32px !important;
+  }
+  .public-download-layout,
+  .dashboard-lower-grid,
+  .analytics-chart-grid,
+  .desktop-install-card {
+    grid-template-columns: 1fr !important;
+  }
+  .dashboard-stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .desktop-install-card > div:last-child {
+    min-width: 0 !important;
+    width: 100%;
+  }
+  .desktop-install-card a,
+  .desktop-install-card button {
+    width: 100%;
+  }
+  .hundred-day-grid {
+    grid-template-columns: repeat(5, 1fr) !important;
+  }
+  .focus-shell {
+    max-width: none !important;
+  }
+  .result-shell {
+    padding-top: 34px !important;
+  }
+}
+
+@media (max-width: 520px) {
+  .page-shell {
+    padding: 18px 14px 28px !important;
+  }
+  .dashboard-stats-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .hundred-day-grid {
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 5px !important;
+  }
+  .public-download-layout h1 {
+    font-size: 38px !important;
+  }
+  .result-shell > div:first-child > div:nth-child(2) {
+    font-size: 58px !important;
+  }
+  .result-shell > div:first-child > div:nth-child(4) {
+    font-size: 42px !important;
+  }
+  input,
+  button,
+  a {
+    max-width: 100%;
   }
 }
