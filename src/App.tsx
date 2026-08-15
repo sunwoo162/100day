@@ -141,6 +141,15 @@ function isDesktopShell() {
   return /\bElectron\//.test(navigator.userAgent) || hasDesktopFlag || window.localStorage.getItem('harufit.desktopShell') === '1'
 }
 
+function isMobileBrowser() {
+  if (isDesktopShell()) return false
+  const ua = navigator.userAgent || ''
+  const mobileUa = /Android|iPhone|iPad|iPod|Windows Phone|Mobile/i.test(ua)
+  const coarsePointer = window.matchMedia?.('(pointer: coarse)').matches ?? false
+  const narrowScreen = window.matchMedia?.('(max-width: 768px)').matches ?? window.innerWidth <= 768
+  return mobileUa || (coarsePointer && narrowScreen)
+}
+
 function apiBaseUrl() {
   const configured = import.meta.env.VITE_API_BASE_URL || '/api'
   if (/^https?:\/\//.test(configured)) return configured.replace(/\/$/, '')
@@ -223,6 +232,26 @@ function LoadingBlock({ label = '데이터를 불러오는 중입니다' }: { la
 
 function ErrorBlock({ message }: { message: string }) {
   return <div style={{ padding: 36, color: C.mintMuted, fontSize: 13 }}>{message}</div>
+}
+
+function MobileBlockedPage() {
+  return (
+    <div style={{ minHeight: '100vh', background: C.canvas, color: C.white, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 22, fontFamily: "'Pretendard', system-ui, sans-serif" }}>
+      <div style={{ width: 'min(420px, 100%)', borderRadius: 18, border: `1px solid ${C.border2}`, background: C.raised, padding: 30, boxShadow: '0 28px 90px rgba(0,0,0,0.36)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+          <LogoMark />
+          <div>
+            <div style={{ fontSize: 20, fontWeight: 900, color: C.white }}>PC에서 접속해 주세요</div>
+            <div style={{ fontSize: 11, color: C.alt, marginTop: 4, fontFamily: "'JetBrains Mono', monospace" }}>HARUFIT DESKTOP</div>
+          </div>
+        </div>
+        <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.8, marginBottom: 22 }}>
+          하루핏은 PC 사용 시간과 앱 기록을 측정하는 서비스라 모바일 웹 접속을 막아두었습니다. Windows PC에서 접속하거나 하루핏 앱을 실행해 주세요.
+        </div>
+        <a href={windowsInstallerUrl()} style={{ display: 'block', textDecoration: 'none', textAlign: 'center', borderRadius: 12, background: C.mint, color: C.ink, padding: '13px 16px', fontSize: 13, fontWeight: 900 }}>Windows 앱 설치</a>
+      </div>
+    </div>
+  )
 }
 
 function InstallPromptModal({ onClose }: { onClose: () => void }) {
@@ -418,6 +447,7 @@ export default function App() {
   }, [challenge, page])
 
   if (authLoading) return <LoadingBlock label="로그인 상태를 확인하는 중입니다" />
+  if (isMobileBrowser()) return <MobileBlockedPage />
   if (!user) return isDesktopShell() ? <LoginPage /> : <PublicDownloadPage />
 
   const currentDay = challenge?.currentDay ?? 1
