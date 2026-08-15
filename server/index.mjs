@@ -646,6 +646,26 @@ const server = http.createServer(async (req, res) => {
       return json(res, 201, db.prepare('SELECT id, name FROM study_categories WHERE user_id = ? AND name = ?').get(user.id, name))
     }
 
+    if (url.pathname === '/api/study/settings' && req.method === 'GET') {
+      const user = requireUser(req, res); if (!user) return
+      const settings = db.prepare('SELECT daily_focus_goal_minutes FROM user_settings WHERE user_id = ?').get(user.id)
+      return json(res, 200, { daily_focus_goal_minutes: settings?.daily_focus_goal_minutes ?? 240 })
+    }
+
+    if (url.pathname === '/api/study/settings' && req.method === 'POST') {
+      const user = requireUser(req, res); if (!user) return
+      const body = await readBody(req)
+      const goal = Math.max(1, Math.min(1440, Math.round(Number(body.daily_focus_goal_minutes || 0))))
+      if (!goal) return json(res, 400, { error: '오늘 목표 시간이 필요합니다' })
+      const now = new Date().toISOString()
+      db.prepare(`
+        INSERT INTO user_settings (user_id, daily_focus_goal_minutes, updated_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET daily_focus_goal_minutes = excluded.daily_focus_goal_minutes, updated_at = excluded.updated_at
+      `).run(user.id, goal, now)
+      return json(res, 200, { daily_focus_goal_minutes: goal })
+    }
+
     if (url.pathname === '/api/focus/sessions' && req.method === 'GET') {
       const user = requireUser(req, res); if (!user) return
       const challenge = getUserChallenge(user.id)
@@ -657,11 +677,13 @@ const server = http.createServer(async (req, res) => {
       const user = requireUser(req, res); if (!user) return
       const challenge = getUserChallenge(user.id)
       const body = await readBody(req)
-      const day = Number(body.day_number || currentDay(challenge))
       const category = String(body.category || '기타')
       const note = String(body.note || '')
       const started = body.started_at || new Date().toISOString()
       const ended = body.ended_at || new Date().toISOString()
+      const endedAt = new Date(ended)
+      const endedDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(Number.isNaN(endedAt.getTime()) ? new Date() : endedAt)
+      const day = dayForDate(challenge, endedDate)
       const duration = Number(body.duration_minutes || 0)
       db.prepare('INSERT OR IGNORE INTO study_categories (user_id, name, created_at) VALUES (?, ?, ?)').run(user.id, category, new Date().toISOString())
       const result = db.prepare('INSERT INTO focus_sessions (user_id, day_number, category, note, started_at, ended_at, duration_minutes) VALUES (?, ?, ?, ?, ?, ?, ?)').run(user.id, day, category, note, started, ended, duration)

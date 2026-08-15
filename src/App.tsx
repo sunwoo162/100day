@@ -88,6 +88,40 @@ function fmtDelta(delta: number, unit = '분') {
   return `어제보다 ${delta > 0 ? '+' : '-'}${Math.abs(delta).toLocaleString()}${unit}`
 }
 
+function parseGoalMinutes(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed) return 0
+  const [hoursRaw, minutesRaw] = trimmed.split(':')
+  if (minutesRaw !== undefined) {
+    const hours = Number(hoursRaw)
+    const minutes = Number(minutesRaw)
+    if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return 0
+    return Math.max(0, Math.min(1440, Math.round(hours * 60 + minutes)))
+  }
+  const numeric = Number(trimmed)
+  if (!Number.isFinite(numeric)) return 0
+  return Math.max(0, Math.min(1440, Math.round(numeric * 60)))
+}
+
+function goalMinutesToInput(minutes: number) {
+  const safe = Math.max(1, Math.min(1440, Math.round(minutes || 240)))
+  return `${Math.floor(safe / 60)}:${String(safe % 60).padStart(2, '0')}`
+}
+
+function formatChartDateLabel(dateText: string) {
+  const date = new Date(`${dateText}T00:00:00`)
+  if (Number.isNaN(date.getTime())) return dateText.slice(5).replace('-', '/')
+  return `${date.getMonth() + 1}/${date.getDate()}`
+}
+
+function formatChartTickMinutes(minutes: number) {
+  if (minutes >= 60) {
+    const hours = minutes / 60
+    return Number.isInteger(hours) ? `${hours}h` : `${hours.toFixed(1)}h`
+  }
+  return `${Math.round(minutes)}m`
+}
+
 function parseHourValue(display: string) {
   const hours = display.match(/(\d+)h/)?.[1] ?? '0'
   const mins = display.match(/(\d+)m/)?.[1] ?? '0'
@@ -125,6 +159,10 @@ function windowsTrackerCommand(pairingToken: string) {
 
 function windowsInstallerUrl() {
   return `${downloadBaseUrl()}/downloads/harufit-windows`
+}
+
+function desktopOpenUrl() {
+  return 'harufit://open'
 }
 
 function shortTime(iso: string | null) {
@@ -276,34 +314,22 @@ export default function App() {
 
   useEffect(() => {
     if (!user) return
-    api.challenge().then(setChallenge).catch(() => setChallenge(null))
-  }, [user])
-
-  useEffect(() => {
-    if (!user) return
-    if (isDesktopShell()) return
-    let lastSentAt = Date.now()
-    const sendBrowserUsage = () => {
-      if (document.hidden) {
-        lastSentAt = Date.now()
-        return
-      }
-      const now = Date.now()
-      const minutes = Math.min(0.5, Math.max(0, (now - lastSentAt) / 60000))
-      lastSentAt = now
-      if (minutes < 0.05) return
-      api.trackBrowser({ minutes, app_name: browserUsageName() }).catch(() => {})
+    let alive = true
+    const loadChallenge = () => {
+      api.challenge()
+        .then((next) => { if (alive) setChallenge(next) })
+        .catch(() => { if (alive) setChallenge(null) })
     }
-    const interval = window.setInterval(sendBrowserUsage, 15000)
+    loadChallenge()
+    const interval = window.setInterval(loadChallenge, 60000)
     const onVisibilityChange = () => {
-      if (document.hidden) sendBrowserUsage()
-      else lastSentAt = Date.now()
+      if (!document.hidden) loadChallenge()
     }
     document.addEventListener('visibilitychange', onVisibilityChange)
     return () => {
+      alive = false
       window.clearInterval(interval)
       document.removeEventListener('visibilitychange', onVisibilityChange)
-      sendBrowserUsage()
     }
   }, [user])
 
@@ -406,11 +432,6 @@ function Sidebar({ page, setPage, open, setOpen, currentDay, user, onLogout, onR
 
       {/* Bottom */}
       <div style={{ padding: '10px 10px 24px', borderTop: `1px solid ${C.border}` }}>
-        {!isDesktopShell() && (
-          <a href={windowsInstallerUrl()} style={{ display: 'block', textDecoration: 'none', textAlign: 'center', margin: '0 10px 12px', padding: '9px 10px', borderRadius: 8, border: 'none', background: C.mint, color: C.ink, cursor: 'pointer', fontSize: 11, fontWeight: 900 }}>
-            앱 설치하기
-          </a>
-        )}
         <div style={{ padding: '8px 10px 14px', marginBottom: 8, borderBottom: `1px solid ${C.border}` }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             {user.avatarUrl ? <img src={user.avatarUrl} alt="" style={{ width: 24, height: 24, borderRadius: '50%' }} /> : <div style={{ width: 24, height: 24, borderRadius: '50%', background: C.chip }} />}
@@ -516,7 +537,7 @@ function DashboardPage({ user, setPage, currentDay, onConnectDevice }: { user: A
     lastPcMinutesRef.current = m.pc.minutes ?? 0
     liveStartRef.current = now
   }
-  const liveMinutes = document.hidden ? 0 : Math.max(0, (now - liveStartRef.current) / 60000)
+  const liveMinutes = desktopShell && !document.hidden ? Math.max(0, (now - liveStartRef.current) / 60000) : 0
   const pcDisplayMinutes = (m.pc.minutes ?? 0) + liveMinutes
   const recent = data.recent ?? []
   const hasRecent = recent.length > 0
@@ -535,18 +556,13 @@ function DashboardPage({ user, setPage, currentDay, onConnectDevice }: { user: A
 
   const appTotals = new Map<string, { name: string; minutes: number }>()
   data.apps.forEach((app) => appTotals.set(app.name, { name: app.name, minutes: app.minutes }))
-  if (!desktopShell) {
-    const liveAppName = browserUsageName()
-    const currentApp = appTotals.get(liveAppName)
-    appTotals.set(liveAppName, { name: liveAppName, minutes: (currentApp?.minutes ?? 0) + liveMinutes })
-  }
   const appRows = [...appTotals.values()].filter((app) => app.minutes > 0).sort((a, b) => b.minutes - a.minutes).slice(0, 8)
-  const maxAppMinutes = Math.max(1 / 60, ...appRows.map((app) => app.minutes))
-  const apps = appRows.map((app, i) => ({
+  const totalAppMinutes = Math.max(1 / 60, appRows.reduce((sum, app) => sum + app.minutes, 0))
+  const apps = appRows.map((app) => ({
     name: app.name,
     dur: fmtMinutes(app.minutes),
-    pct: Math.round((app.minutes / maxAppMinutes) * 100),
-    color: i === 0 ? C.mint : '#2e2e2e',
+    pct: Math.round((app.minutes / totalAppMinutes) * 100),
+    color: C.mint,
   }))
   const timeline = data.events.map((event) => ({
     time: event.time,
@@ -563,7 +579,7 @@ function DashboardPage({ user, setPage, currentDay, onConnectDevice }: { user: A
   const devPcts = deviceTotal > 0 ? [1] : [0]
 
   return (
-    <div style={{ padding: '32px 36px', maxWidth: 1080 }}>
+    <div style={{ padding: '32px 36px' }}>
       {/* Header */}
       <div style={{ marginBottom: 36 }}>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 12 }}>
@@ -585,6 +601,15 @@ function DashboardPage({ user, setPage, currentDay, onConnectDevice }: { user: A
         </div>
       </div>
       {/* Stat cards */}
+      {!desktopShell && (
+        <div style={{ marginBottom: 14, borderRadius: 12, border: `1px solid rgba(0,232,197,0.16)`, background: 'rgba(0,232,197,0.06)', padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontSize: 12, color: C.white, fontWeight: 900, marginBottom: 3 }}>웹에서는 기록을 추가하지 않아요</div>
+            <div style={{ fontSize: 11, color: C.alt, lineHeight: 1.6 }}>PC 시간과 앱 사용량은 Windows 앱에서만 측정되고, 웹에서는 같은 계정에 저장된 기록만 보여줍니다.</div>
+          </div>
+          <a href={desktopOpenUrl()} style={{ textDecoration: 'none', padding: '9px 14px', borderRadius: 999, background: C.mint, color: C.ink, fontSize: 11, fontWeight: 900, whiteSpace: 'nowrap' }}>앱 열기</a>
+        </div>
+      )}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 28 }}>
         {stats.map((s) => (
           <div key={s.id} style={{ background: C.raised, borderRadius: 14, padding: '18px 18px 14px', border: `1px solid ${C.border}` }}>
@@ -641,7 +666,10 @@ function DashboardPage({ user, setPage, currentDay, onConnectDevice }: { user: A
 
         {/* App usage */}
         <div style={{ background: C.raised, borderRadius: 14, padding: '20px', border: `1px solid ${C.border}` }}>
-          <div style={{ fontSize: 11, color: C.soft, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 18, fontWeight: 700 }}>앱 사용량</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, marginBottom: 18 }}>
+            <div style={{ fontSize: 11, color: C.soft, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', fontWeight: 700 }}>앱 사용량</div>
+            <div style={{ fontSize: 10, color: C.alt }}>총 {fmtMinutes(totalAppMinutes)}</div>
+          </div>
           {apps.map((a, i) => (
             <div key={a.name} style={{ marginBottom: 14 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
@@ -649,7 +677,7 @@ function DashboardPage({ user, setPage, currentDay, onConnectDevice }: { user: A
                   <AppIconMini name={a.name} />
                   <span style={{ fontSize: 12, color: i === 0 ? C.white : C.muted }}>{a.name}</span>
                 </div>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.alt }}>{a.dur}</span>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.alt }}>{a.dur} · {a.pct}%</span>
               </div>
               <div style={{ height: 3, background: C.border, borderRadius: 2 }}>
                 <div style={{ width: `${a.pct}%`, height: '100%', background: a.color, borderRadius: 2, transition: 'width 0.7s' }} />
@@ -659,16 +687,43 @@ function DashboardPage({ user, setPage, currentDay, onConnectDevice }: { user: A
         </div>
       </div>
 
-      {/* Study CTA */}
-      <div style={{ marginTop: 16, background: 'linear-gradient(135deg, rgba(0,232,197,0.06) 0%, rgba(0,232,197,0.02) 100%)', borderRadius: 14, padding: '18px 24px', border: `1px solid rgba(0,232,197,0.12)`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 2 }}>공부 기록</div>
-          <div style={{ fontSize: 11, color: C.alt }}>노트북/휴대폰 없이 하는 일을 타이머로 저장하세요.</div>
+      {/* Bottom CTA */}
+      {desktopShell ? (
+        <div style={{ marginTop: 16, background: 'linear-gradient(135deg, rgba(0,232,197,0.06) 0%, rgba(0,232,197,0.02) 100%)', borderRadius: 14, padding: '18px 24px', border: `1px solid rgba(0,232,197,0.12)`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.white, marginBottom: 2 }}>공부 기록</div>
+            <div style={{ fontSize: 11, color: C.alt }}>노트북/휴대폰 없이 하는 일을 타이머로 저장하세요.</div>
+          </div>
+          <button onClick={() => setPage('focus')} style={{ padding: '9px 20px', borderRadius: 50, background: C.mint, color: C.ink, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, fontWeight: 700, border: 'none', cursor: 'pointer', letterSpacing: '0.04em' }}>
+            Start →
+          </button>
         </div>
-        <button onClick={() => setPage('focus')} style={{ padding: '9px 20px', borderRadius: 50, background: C.mint, color: C.ink, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, fontWeight: 700, border: 'none', cursor: 'pointer', letterSpacing: '0.04em' }}>
-          Start →
-        </button>
-      </div>
+      ) : (
+        <div style={{ marginTop: 16, background: 'linear-gradient(135deg, rgba(0,232,197,0.12), rgba(26,26,26,1) 42%, rgba(13,13,13,1))', borderRadius: 16, padding: '26px', border: `1px solid rgba(0,232,197,0.18)`, display: 'grid', gridTemplateColumns: '1fr auto', gap: 24, alignItems: 'center' }}>
+          <div>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '5px 8px', borderRadius: 7, background: 'rgba(0,232,197,0.1)', border: `1px solid rgba(0,232,197,0.16)`, marginBottom: 12 }}>
+              <IcoDevice c={C.mint} />
+              <span style={{ fontSize: 10, color: C.mint, fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, letterSpacing: '0.08em' }}>HARUFIT DESKTOP</span>
+            </div>
+            <div style={{ fontSize: 24, fontWeight: 900, color: C.white, letterSpacing: '-0.03em', marginBottom: 8 }}>Windows 앱 설치</div>
+            <div style={{ fontSize: 12, color: C.alt, lineHeight: 1.8, maxWidth: 620 }}>
+              하루핏 PC 앱은 현재 보고 있는 앱과 창 제목을 자동 기록합니다. 설치 후 로그인만 하면 PC 시간, 앱 사용량, 개발 시간이 계정에 저장됩니다.
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
+              {['활성 앱 측정', '유휴 시간 제외', '백그라운드 동기화'].map((label) => (
+                <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 10px', borderRadius: 999, background: 'rgba(0,0,0,0.24)', border: `1px solid ${C.border}` }}>
+                  <span style={{ width: 5, height: 5, borderRadius: 99, background: C.mint }} />
+                  <span style={{ fontSize: 10, color: C.muted, fontWeight: 700 }}>{label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{ display: 'grid', gap: 10, minWidth: 210 }}>
+            <a href={desktopOpenUrl()} style={{ textDecoration: 'none', textAlign: 'center', padding: '13px 20px', borderRadius: 999, background: C.mint, color: C.ink, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 13, fontWeight: 900, boxShadow: '0 16px 34px rgba(0,232,197,0.14)' }}>하루핏 열기</a>
+            <a href={windowsInstallerUrl()} style={{ textDecoration: 'none', textAlign: 'center', padding: '10px 18px', borderRadius: 999, border: `1px solid ${C.border2}`, background: 'rgba(0,0,0,0.18)', color: C.muted, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 11, fontWeight: 800 }}>Windows 다운로드</a>
+          </div>
+        </div>
+      )}
       {appPicker && data && (
         <AppPickerModal
           category={appPicker}
@@ -899,18 +954,19 @@ function AnalyticsPage() {
   const screenPc = rows.map((row) => row.pc_minutes)
   const focusData = rows.map((row) => row.focus_minutes)
   const developmentData = rows.map((row) => row.development_minutes)
+  const dateLabels = rows.map((row) => formatChartDateLabel(row.date))
   const ghData = rows.map((row) => row.github_commits)
   const avg = (arr: number[]) => arr.length ? arr.reduce((a, v) => a + v, 0) / arr.length : 0
   const chartMax = (arr: number[]) => Math.max(1, ...arr)
 
   const insights = buildInsights(rows)
 
-  const maxAppMinutes = Math.max(1, ...data.topApps.map((app) => app.minutes))
-  const apps = data.topApps.map((app, i) => ({
+  const totalAppMinutes = Math.max(1, data.topApps.reduce((sum, app) => sum + app.minutes, 0))
+  const apps = data.topApps.map((app) => ({
     name: app.name,
-    pct: Math.round((app.minutes / maxAppMinutes) * 100),
+    pct: Math.round((app.minutes / totalAppMinutes) * 100),
     time: fmtMinutes(app.minutes),
-    color: i === 0 ? C.mint : '#2a2a2a',
+    color: C.mint,
   }))
 
   return (
@@ -939,7 +995,7 @@ function AnalyticsPage() {
           <div style={{ display: 'flex', gap: 14, marginBottom: 12 }}>
             <Legend color={C.mint} label="PC" />
           </div>
-          {hasRows ? <BarChartSVG data={screenPc} maxVal={chartMax(screenPc)} color={C.mint} h={90} /> : <EmptyChart height={90} />}
+          {hasRows ? <LineChartSVG data={screenPc} labels={dateLabels} maxVal={chartMax(screenPc)} color={C.mint} h={150} /> : <EmptyChart height={150} />}
         </ChartCard>
 
         {/* Focus */}
@@ -948,7 +1004,7 @@ function AnalyticsPage() {
             <span style={{ fontSize: 26, fontWeight: 800, color: C.white }}>{fmtMinutes(avg(focusData))}</span>
             <span style={{ fontSize: 10, color: C.mint }}>평균</span>
           </div>
-          {hasRows ? <BarChartSVG data={focusData} maxVal={chartMax(focusData)} color={C.mint} h={90} /> : <EmptyChart height={90} />}
+          {hasRows ? <LineChartSVG data={focusData} labels={dateLabels} maxVal={chartMax(focusData)} color={C.mint} h={150} /> : <EmptyChart height={150} />}
         </ChartCard>
 
         {/* Development */}
@@ -957,7 +1013,7 @@ function AnalyticsPage() {
             <span style={{ fontSize: 26, fontWeight: 800, color: C.white }}>{fmtMinutes(avg(developmentData))}</span>
             <span style={{ fontSize: 10, color: C.mint }}>평균</span>
           </div>
-          {hasRows ? <BarChartSVG data={developmentData} maxVal={chartMax(developmentData)} color={C.mintBright} h={90} /> : <EmptyChart height={90} />}
+          {hasRows ? <LineChartSVG data={developmentData} labels={dateLabels} maxVal={chartMax(developmentData)} color={C.mintBright} h={150} /> : <EmptyChart height={150} />}
         </ChartCard>
       </div>
 
@@ -969,7 +1025,7 @@ function AnalyticsPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
         {/* App usage */}
-        <ChartCard title="상위 앱" subtitle="누적 시간">
+        <ChartCard title="상위 앱" subtitle={`총 ${fmtMinutes(totalAppMinutes)} 중 비율`}>
           {apps.length ? apps.map(a => (
             <div key={a.name} style={{ marginBottom: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
@@ -977,7 +1033,7 @@ function AnalyticsPage() {
                   <AppIconMini name={a.name} />
                   <span style={{ fontSize: 12, color: C.muted }}>{a.name}</span>
                 </div>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.alt }}>{a.time}</span>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.alt }}>{a.time} · {a.pct}%</span>
               </div>
               <div style={{ height: 3, background: C.border, borderRadius: 2 }}>
                 <div style={{ width: `${a.pct}%`, height: '100%', background: a.color, borderRadius: 2 }} />
@@ -1073,6 +1129,9 @@ function FocusPage({ currentDay }: { currentDay: number }) {
   const [categories, setCategories] = useState<StudyCategory[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [goalMins, setGoalMins] = useState(240)
+  const [goalInput, setGoalInput] = useState('4:00')
+  const [goalSaving, setGoalSaving] = useState(false)
   const ref = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const totalMins = sessions.reduce((a, s) => a + s.duration_minutes, 0) + Math.floor(secs / 60)
@@ -1083,6 +1142,12 @@ function FocusPage({ currentDay }: { currentDay: number }) {
       .then((items) => {
         setCategories(items)
         if (items[0]) setCat(items[0].name)
+      })
+      .catch((err) => setError(err.message))
+    api.studySettings()
+      .then((settings) => {
+        setGoalMins(settings.daily_focus_goal_minutes)
+        setGoalInput(goalMinutesToInput(settings.daily_focus_goal_minutes))
       })
       .catch((err) => setError(err.message))
   }, [currentDay])
@@ -1141,7 +1206,25 @@ function FocusPage({ currentDay }: { currentDay: number }) {
       setError(err instanceof Error ? err.message : '카테고리 추가 실패')
     }
   }
-  const goalMins = 240
+  const saveGoal = async () => {
+    const parsed = parseGoalMinutes(goalInput)
+    if (!parsed) {
+      setError('목표 시간은 1분 이상으로 입력하세요')
+      setGoalInput(goalMinutesToInput(goalMins))
+      return
+    }
+    setGoalSaving(true)
+    try {
+      const saved = await api.updateStudySettings({ daily_focus_goal_minutes: parsed })
+      setGoalMins(saved.daily_focus_goal_minutes)
+      setGoalInput(goalMinutesToInput(saved.daily_focus_goal_minutes))
+      setError('')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '목표 시간 저장 실패')
+    } finally {
+      setGoalSaving(false)
+    }
+  }
 
   return (
     <div style={{ padding: '40px 36px', maxWidth: 600, margin: '0 auto' }}>
@@ -1207,10 +1290,23 @@ function FocusPage({ currentDay }: { currentDay: number }) {
 
       {/* Daily goal bar */}
       <div style={{ background: C.raised, borderRadius: 14, padding: '16px 20px', border: `1px solid ${C.border}`, marginBottom: 20 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-          <span style={{ fontSize: 11, color: C.alt }}>오늘 목표</span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 8, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 11, color: C.alt }}>오늘 목표</span>
+            <input
+              value={goalInput}
+              onChange={e => setGoalInput(e.target.value)}
+              onBlur={saveGoal}
+              onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+              placeholder="4:00"
+              style={{ width: 64, padding: '5px 7px', background: C.surface, border: `1px solid ${C.border2}`, borderRadius: 7, color: C.white, fontFamily: "'JetBrains Mono', monospace", fontSize: 11, outline: 'none' }}
+            />
+            <button onClick={saveGoal} disabled={goalSaving} style={{ border: 'none', borderRadius: 999, background: 'rgba(0,232,197,0.08)', color: C.mint, padding: '5px 9px', fontSize: 10, fontWeight: 800, cursor: goalSaving ? 'default' : 'pointer', fontFamily: "'Pretendard', system-ui, sans-serif" }}>
+              {goalSaving ? '저장 중' : '저장'}
+            </button>
+          </div>
           <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: totalMins >= goalMins ? C.mint : C.muted }}>
-            {Math.floor(totalMins / 60)}시간 {totalMins % 60}분 / 4시간 00분
+            {Math.floor(totalMins / 60)}시간 {totalMins % 60}분 / {Math.floor(goalMins / 60)}시간 {String(goalMins % 60).padStart(2, '0')}분
           </span>
         </div>
         <div style={{ height: 4, background: C.border, borderRadius: 2 }}>
@@ -1683,6 +1779,82 @@ function DualLineChart({ a, b, maxVal, colorA, colorB, h }: { a: number[]; b: nu
     <svg width="100%" viewBox={`0 0 ${W} ${h}`} preserveAspectRatio="none" style={{ display: 'block', height: h }}>
       <polyline points={pts(a)} fill="none" stroke={colorA} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
       <polyline points={pts(b)} fill="none" stroke={colorB} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function LineChartSVG({ data, labels, maxVal, color, h }: { data: number[]; labels?: string[]; maxVal: number; color: string; h: number }) {
+  if (!data.length) return <EmptyChart height={h} />
+  const W = 420
+  const padLeft = 36
+  const padRight = 8
+  const padTop = 10
+  const padBottom = 24
+  const chartW = W - padLeft - padRight
+  const chartH = h - padTop - padBottom
+  const denom = Math.max(1, data.length - 1)
+  const max = Math.max(1, maxVal)
+  const points = data.map((v, i) => {
+    const x = padLeft + (i / denom) * chartW
+    const y = padTop + chartH - (v / max) * chartH
+    return { x, y, v }
+  })
+  const line = points.map((p) => `${p.x},${p.y}`).join(' ')
+  const active = points.filter((p) => p.v > 0)
+  const yTicks = [max, max / 2, 0]
+  const labelStep = Math.max(1, Math.ceil(data.length / 6))
+
+  return (
+    <svg width="100%" viewBox={`0 0 ${W} ${h}`} preserveAspectRatio="none" style={{ display: 'block', height: h }}>
+      {yTicks.map((tick) => {
+        const y = padTop + chartH - (tick / max) * chartH
+        return (
+          <g key={tick}>
+            <line
+              x1={padLeft}
+              x2={W - padRight}
+              y1={y}
+              y2={y}
+              stroke="rgba(255,255,255,0.08)"
+              strokeWidth="1"
+              vectorEffect="non-scaling-stroke"
+            />
+            <text x={padLeft - 8} y={y + 3} textAnchor="end" fill={C.alt} fontSize="9" fontFamily="'JetBrains Mono', monospace">
+              {formatChartTickMinutes(tick)}
+            </text>
+          </g>
+        )
+      })}
+      {points.map((p, i) => {
+        const show = i === 0 || i === points.length - 1 || i % labelStep === 0
+        if (!show) return null
+        return (
+          <text key={`label-${i}`} x={p.x} y={h - 5} textAnchor="middle" fill={C.alt} fontSize="9" fontFamily="'JetBrains Mono', monospace">
+            {labels?.[i] ?? String(i + 1)}
+          </text>
+        )
+      })}
+      <polyline
+        points={line}
+        fill="none"
+        stroke={color}
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        vectorEffect="non-scaling-stroke"
+      />
+      {active.map((p, i) => (
+        <circle
+          key={`${p.x}-${i}`}
+          cx={p.x}
+          cy={p.y}
+          r={i === active.length - 1 ? 3.2 : 2.4}
+          fill={C.raised}
+          stroke={color}
+          strokeWidth="2"
+          vectorEffect="non-scaling-stroke"
+        />
+      ))}
     </svg>
   )
 }

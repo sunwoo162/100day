@@ -84,6 +84,10 @@ export type StudyCategory = {
   name: string
 }
 
+export type StudySettings = {
+  daily_focus_goal_minutes: number
+}
+
 export type AppClassification = {
   name: string
   category: 'focus' | 'development'
@@ -134,6 +138,8 @@ export const api = {
   deleteAppClassification: (appName: string, category: 'focus' | 'development') => request<void>(`/app-classifications/${encodeURIComponent(appName)}/${category}`, { method: 'DELETE' }),
   studyCategories: () => request<StudyCategory[]>('/study/categories'),
   addStudyCategory: (data: { name: string }) => request<StudyCategory>('/study/categories', { method: 'POST', body: JSON.stringify(data) }),
+  studySettings: () => request<StudySettings>('/study/settings'),
+  updateStudySettings: (data: StudySettings) => request<StudySettings>('/study/settings', { method: 'POST', body: JSON.stringify(data) }),
   focusSessions: (day = 37) => request<FocusSession[]>(`/focus/sessions?day=${day}`),
   addFocusSession: (data: unknown) => request<FocusSession>('/focus/sessions', { method: 'POST', body: JSON.stringify(data) }),
   result: () => request<ResultData>('/result'),

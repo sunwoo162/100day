@@ -21,7 +21,7 @@ fs.rmSync(finalOutputDir, { recursive: true, force: true })
 fs.mkdirSync(finalOutputDir, { recursive: true })
 
 run('pnpm', ['run', 'build'])
-run('pnpm', ['exec', 'electron-builder', '--win', 'nsis', '--x64', `--config.directories.output=${tempOutputDir}`])
+run('pnpm', ['exec', 'electron-builder', '--win', 'nsis', '--x64', '--publish', 'never', `--config.directories.output=${tempOutputDir}`])
 
 for (const entry of fs.readdirSync(tempOutputDir, { withFileTypes: true })) {
   if (entry.isDirectory()) continue

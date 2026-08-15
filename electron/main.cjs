@@ -2,14 +2,17 @@ const { app, BrowserWindow, Menu, Tray, shell, session, nativeTheme } = require(
 const { spawn } = require('node:child_process')
 const fs = require('node:fs')
 const path = require('node:path')
+const packageJson = require('../package.json')
 
 const appRootDir = path.resolve(__dirname, '..')
 const rootDir = app.isPackaged ? path.join(process.resourcesPath, 'app') : appRootDir
 const iconPath = path.join(rootDir, 'assets', 'icon.ico')
 const isWindows = process.platform === 'win32'
 const devServerUrl = process.env.HARUFIT_DESKTOP_DEV_SERVER_URL || ''
-const baseAppUrl = devServerUrl || 'http://localhost:4000'
-const apiBaseUrl = 'http://localhost:4000/api'
+const productionAppUrl = process.env.HARUFIT_WEB_ORIGIN || 'https://harufit.https.gsmsv.site'
+const baseAppUrl = devServerUrl || productionAppUrl
+const apiBaseUrl = (process.env.HARUFIT_API_ORIGIN || `${baseAppUrl.replace(/\/$/, '')}/api`).replace(/\/$/, '')
+const appCookieUrl = baseAppUrl.replace(/\/$/, '')
 const desktopSessionPartition = 'persist:harufit'
 const children = new Set()
 let desktopTrackerProcess = null
@@ -22,6 +25,7 @@ let isQuitting = false
 app.setPath('userData', path.join(app.getPath('appData'), 'harufit'))
 app.setName('하루핏')
 if (isWindows) app.setAppUserModelId('site.harufit.desktop')
+if (app.isPackaged) app.setAsDefaultProtocolClient('harufit')
 nativeTheme.themeSource = 'dark'
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock()
@@ -32,6 +36,7 @@ if (!gotSingleInstanceLock) {
 function withDesktopFlag(url) {
   const parsed = new URL(url)
   parsed.searchParams.set('desktop', '1')
+  parsed.searchParams.set('appVersion', packageJson.version || '0')
   return parsed.toString()
 }
 
@@ -114,22 +119,22 @@ function migrateLegacyDatabase(dataDir) {
 }
 
 async function sessionCookieHeader() {
-  const cookies = await session.fromPartition(desktopSessionPartition).cookies.get({ url: 'http://localhost:4000', name: 'sid' })
+  const cookies = await session.fromPartition(desktopSessionPartition).cookies.get({ url: appCookieUrl, name: 'sid' })
   if (!cookies.length) return ''
   return cookies.map(cookie => `${cookie.name}=${cookie.value}`).join('; ')
 }
 
 async function migrateLegacySessionCookie() {
   const targetSession = session.fromPartition(desktopSessionPartition)
-  const existing = await targetSession.cookies.get({ url: 'http://localhost:4000', name: 'sid' })
+  const existing = await targetSession.cookies.get({ url: appCookieUrl, name: 'sid' })
   if (existing.length) return
 
-  const legacy = await session.defaultSession.cookies.get({ url: 'http://localhost:4000', name: 'sid' })
+  const legacy = await session.defaultSession.cookies.get({ url: appCookieUrl, name: 'sid' })
   if (!legacy.length) return
 
   const cookie = legacy[0]
   await targetSession.cookies.set({
-    url: 'http://localhost:4000',
+    url: appCookieUrl,
     name: cookie.name,
     value: cookie.value,
     path: cookie.path || '/',
@@ -345,7 +350,7 @@ function createWindow() {
 
 app.whenReady().then(async () => {
   enableAutoLaunch()
-  startApiServer()
+  if (devServerUrl) startApiServer()
   await clearStaleWebCache()
   await migrateLegacySessionCookie()
   startDesktopTrackerAfterLogin()
@@ -358,6 +363,11 @@ app.whenReady().then(async () => {
 })
 
 app.on('second-instance', () => {
+  showMainWindow()
+})
+
+app.on('open-url', (event) => {
+  event.preventDefault()
   showMainWindow()
 })
 

@@ -62,6 +62,12 @@ jobs:
             cd "$APP_DIR"
             git fetch origin "$BRANCH"
             git reset --hard "origin/$BRANCH"
+            if ! git lfs version >/dev/null 2>&1; then
+              sudo apt-get update
+              sudo apt-get install -y git-lfs
+            fi
+            git lfs install --local
+            git lfs pull
 
             test -n "$HARUFIT_GOOGLE_CLIENT_ID" || { echo "HARUFIT_GOOGLE_CLIENT_ID secret is missing"; exit 1; }
             test -n "$HARUFIT_GOOGLE_CLIENT_SECRET" || { echo "HARUFIT_GOOGLE_CLIENT_SECRET secret is missing"; exit 1; }
