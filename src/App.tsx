@@ -507,12 +507,12 @@ function DashboardPage({ user, setPage, currentDay, onConnectDevice }: { user: A
   const appTotals = new Map<string, { name: string; minutes: number }>()
   data.apps.forEach((app) => appTotals.set(app.name, { name: app.name, minutes: app.minutes }))
   const appRows = [...appTotals.values()].filter((app) => app.minutes > 0).sort((a, b) => b.minutes - a.minutes).slice(0, 8)
-  const maxAppMinutes = Math.max(1 / 60, ...appRows.map((app) => app.minutes))
-  const apps = appRows.map((app, i) => ({
+  const totalAppMinutes = Math.max(1 / 60, appRows.reduce((sum, app) => sum + app.minutes, 0))
+  const apps = appRows.map((app) => ({
     name: app.name,
     dur: fmtMinutes(app.minutes),
-    pct: Math.round((app.minutes / maxAppMinutes) * 100),
-    color: i === 0 ? C.mint : '#2e2e2e',
+    pct: Math.round((app.minutes / totalAppMinutes) * 100),
+    color: C.mint,
   }))
   const timeline = data.events.map((event) => ({
     time: event.time,
@@ -616,7 +616,10 @@ function DashboardPage({ user, setPage, currentDay, onConnectDevice }: { user: A
 
         {/* App usage */}
         <div style={{ background: C.raised, borderRadius: 14, padding: '20px', border: `1px solid ${C.border}` }}>
-          <div style={{ fontSize: 11, color: C.soft, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', marginBottom: 18, fontWeight: 700 }}>앱 사용량</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, marginBottom: 18 }}>
+            <div style={{ fontSize: 11, color: C.soft, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em', fontWeight: 700 }}>앱 사용량</div>
+            <div style={{ fontSize: 10, color: C.alt }}>총 {fmtMinutes(totalAppMinutes)}</div>
+          </div>
           {apps.map((a, i) => (
             <div key={a.name} style={{ marginBottom: 14 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
@@ -624,7 +627,7 @@ function DashboardPage({ user, setPage, currentDay, onConnectDevice }: { user: A
                   <AppIconMini name={a.name} />
                   <span style={{ fontSize: 12, color: i === 0 ? C.white : C.muted }}>{a.name}</span>
                 </div>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.alt }}>{a.dur}</span>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.alt }}>{a.dur} · {a.pct}%</span>
               </div>
               <div style={{ height: 3, background: C.border, borderRadius: 2 }}>
                 <div style={{ width: `${a.pct}%`, height: '100%', background: a.color, borderRadius: 2, transition: 'width 0.7s' }} />
@@ -907,12 +910,12 @@ function AnalyticsPage() {
 
   const insights = buildInsights(rows)
 
-  const maxAppMinutes = Math.max(1, ...data.topApps.map((app) => app.minutes))
-  const apps = data.topApps.map((app, i) => ({
+  const totalAppMinutes = Math.max(1, data.topApps.reduce((sum, app) => sum + app.minutes, 0))
+  const apps = data.topApps.map((app) => ({
     name: app.name,
-    pct: Math.round((app.minutes / maxAppMinutes) * 100),
+    pct: Math.round((app.minutes / totalAppMinutes) * 100),
     time: fmtMinutes(app.minutes),
-    color: i === 0 ? C.mint : '#2a2a2a',
+    color: C.mint,
   }))
 
   return (
@@ -971,7 +974,7 @@ function AnalyticsPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
         {/* App usage */}
-        <ChartCard title="상위 앱" subtitle="누적 시간">
+        <ChartCard title="상위 앱" subtitle={`총 ${fmtMinutes(totalAppMinutes)} 중 비율`}>
           {apps.length ? apps.map(a => (
             <div key={a.name} style={{ marginBottom: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
@@ -979,7 +982,7 @@ function AnalyticsPage() {
                   <AppIconMini name={a.name} />
                   <span style={{ fontSize: 12, color: C.muted }}>{a.name}</span>
                 </div>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.alt }}>{a.time}</span>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.alt }}>{a.time} · {a.pct}%</span>
               </div>
               <div style={{ height: 3, background: C.border, borderRadius: 2 }}>
                 <div style={{ width: `${a.pct}%`, height: '100%', background: a.color, borderRadius: 2 }} />
