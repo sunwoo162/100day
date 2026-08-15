@@ -494,7 +494,13 @@ function Sidebar({ page, setPage, open, setOpen, currentDay, user, onLogout, onR
 
       {/* Bottom */}
       <div style={{ padding: '10px 10px 24px', borderTop: `1px solid ${C.border}` }}>
-        <div style={{ padding: '8px 10px 14px', marginBottom: 8, borderBottom: `1px solid ${C.border}` }}>
+        <div style={{ paddingBottom: 10, marginBottom: 10, borderBottom: `1px solid ${C.border}` }}>
+          <NavBtn active={page === 'result'} onClick={onResultClick}>
+            <IcoTrophy c={page === 'result' ? C.mint : '#4a4a4a'} />
+            <span>백일 결과</span>
+          </NavBtn>
+        </div>
+        <div style={{ padding: '8px 10px 0' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             {user.avatarUrl ? <img src={user.avatarUrl} alt="" style={{ width: 24, height: 24, borderRadius: '50%' }} /> : <div style={{ width: 24, height: 24, borderRadius: '50%', background: C.chip }} />}
             <div style={{ minWidth: 0 }}>
@@ -506,10 +512,6 @@ function Sidebar({ page, setPage, open, setOpen, currentDay, user, onLogout, onR
             로그아웃
           </button>
         </div>
-        <NavBtn active={page === 'result'} onClick={onResultClick}>
-          <IcoTrophy c={page === 'result' ? C.mint : '#4a4a4a'} />
-          <span>백일 결과</span>
-        </NavBtn>
       </div>
     </aside>
   )
