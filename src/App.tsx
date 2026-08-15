@@ -487,7 +487,7 @@ function DashboardPage({ user, setPage, currentDay, onConnectDevice }: { user: A
     lastPcMinutesRef.current = m.pc.minutes ?? 0
     liveStartRef.current = now
   }
-  const liveMinutes = document.hidden ? 0 : Math.max(0, (now - liveStartRef.current) / 60000)
+  const liveMinutes = desktopShell && !document.hidden ? Math.max(0, (now - liveStartRef.current) / 60000) : 0
   const pcDisplayMinutes = (m.pc.minutes ?? 0) + liveMinutes
   const recent = data.recent ?? []
   const hasRecent = recent.length > 0
@@ -506,11 +506,6 @@ function DashboardPage({ user, setPage, currentDay, onConnectDevice }: { user: A
 
   const appTotals = new Map<string, { name: string; minutes: number }>()
   data.apps.forEach((app) => appTotals.set(app.name, { name: app.name, minutes: app.minutes }))
-  if (!desktopShell) {
-    const liveAppName = browserUsageName()
-    const currentApp = appTotals.get(liveAppName)
-    appTotals.set(liveAppName, { name: liveAppName, minutes: (currentApp?.minutes ?? 0) + liveMinutes })
-  }
   const appRows = [...appTotals.values()].filter((app) => app.minutes > 0).sort((a, b) => b.minutes - a.minutes).slice(0, 8)
   const maxAppMinutes = Math.max(1 / 60, ...appRows.map((app) => app.minutes))
   const apps = appRows.map((app, i) => ({
@@ -556,6 +551,15 @@ function DashboardPage({ user, setPage, currentDay, onConnectDevice }: { user: A
         </div>
       </div>
       {/* Stat cards */}
+      {!desktopShell && (
+        <div style={{ marginBottom: 14, borderRadius: 12, border: `1px solid rgba(0,232,197,0.16)`, background: 'rgba(0,232,197,0.06)', padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontSize: 12, color: C.white, fontWeight: 900, marginBottom: 3 }}>웹에서는 기록을 추가하지 않아요</div>
+            <div style={{ fontSize: 11, color: C.alt, lineHeight: 1.6 }}>PC 시간과 앱 사용량은 Windows 앱에서만 측정되고, 웹에서는 같은 계정에 저장된 기록만 보여줍니다.</div>
+          </div>
+          <a href={desktopOpenUrl()} style={{ textDecoration: 'none', padding: '9px 14px', borderRadius: 999, background: C.mint, color: C.ink, fontSize: 11, fontWeight: 900, whiteSpace: 'nowrap' }}>앱 열기</a>
+        </div>
+      )}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 28 }}>
         {stats.map((s) => (
           <div key={s.id} style={{ background: C.raised, borderRadius: 14, padding: '18px 18px 14px', border: `1px solid ${C.border}` }}>
