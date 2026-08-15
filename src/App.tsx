@@ -165,6 +165,39 @@ function desktopOpenUrl() {
   return 'harufit://open'
 }
 
+function useDesktopOpenPrompt() {
+  const [installPromptOpen, setInstallPromptOpen] = useState(false)
+
+  const openDesktopApp = () => {
+    let appOpened = false
+    const markOpened = () => {
+      appOpened = true
+    }
+    const cleanup = () => {
+      window.removeEventListener('blur', markOpened)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+    const onVisibilityChange = () => {
+      if (document.hidden) markOpened()
+    }
+
+    window.addEventListener('blur', markOpened, { once: true })
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    window.location.href = desktopOpenUrl()
+
+    window.setTimeout(() => {
+      cleanup()
+      if (!appOpened && !document.hidden) setInstallPromptOpen(true)
+    }, 1400)
+  }
+
+  return {
+    installPromptOpen,
+    setInstallPromptOpen,
+    openDesktopApp,
+  }
+}
+
 function shortTime(iso: string | null) {
   if (!iso) return '아직 없음'
   const date = new Date(iso)
@@ -184,6 +217,29 @@ function LoadingBlock({ label = '데이터를 불러오는 중입니다' }: { la
 
 function ErrorBlock({ message }: { message: string }) {
   return <div style={{ padding: 36, color: C.mintMuted, fontSize: 13 }}>{message}</div>
+}
+
+function InstallPromptModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 22, background: 'rgba(0,0,0,0.76)' }}>
+      <div onClick={(event) => event.stopPropagation()} style={{ width: 'min(420px, 100%)', borderRadius: 18, border: `1px solid ${C.border2}`, background: C.raised, padding: 28, boxShadow: '0 28px 90px rgba(0,0,0,0.45)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
+          <LogoMark />
+          <div>
+            <div style={{ color: C.white, fontSize: 18, fontWeight: 900 }}>하루핏이 설치되어 있지 않습니다</div>
+            <div style={{ color: C.alt, fontSize: 12, marginTop: 4 }}>Windows 앱을 설치하시겠습니까?</div>
+          </div>
+        </div>
+        <div style={{ color: C.muted, fontSize: 12, lineHeight: 1.8, marginBottom: 22 }}>
+          설치 후 다시 <b style={{ color: C.soft }}>하루핏 열기</b>를 누르면 앱이 바로 실행됩니다.
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <button onClick={onClose} style={{ border: `1px solid ${C.border2}`, borderRadius: 12, background: 'transparent', color: C.muted, padding: '12px 14px', fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, fontWeight: 800, cursor: 'pointer' }}>취소</button>
+          <a href={windowsInstallerUrl()} onClick={onClose} style={{ textDecoration: 'none', textAlign: 'center', borderRadius: 12, background: C.mint, color: C.ink, padding: '12px 14px', fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 12, fontWeight: 900 }}>설치하기</a>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function LoginPage() {
@@ -490,6 +546,7 @@ function DashboardPage({ user, setPage, currentDay, onConnectDevice }: { user: A
   const liveStartRef = useRef(Date.now())
   const lastPcMinutesRef = useRef<number | null>(null)
   const desktopShell = isDesktopShell()
+  const { installPromptOpen, setInstallPromptOpen, openDesktopApp } = useDesktopOpenPrompt()
 
   useEffect(() => {
     let cancelled = false
@@ -719,11 +776,12 @@ function DashboardPage({ user, setPage, currentDay, onConnectDevice }: { user: A
             </div>
           </div>
           <div style={{ display: 'grid', gap: 10, minWidth: 210 }}>
-            <a href={desktopOpenUrl()} style={{ textDecoration: 'none', textAlign: 'center', padding: '13px 20px', borderRadius: 999, background: C.mint, color: C.ink, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 13, fontWeight: 900, boxShadow: '0 16px 34px rgba(0,232,197,0.14)' }}>하루핏 열기</a>
+            <button onClick={openDesktopApp} style={{ textAlign: 'center', padding: '13px 20px', borderRadius: 999, border: 'none', background: C.mint, color: C.ink, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 13, fontWeight: 900, boxShadow: '0 16px 34px rgba(0,232,197,0.14)', cursor: 'pointer' }}>하루핏 열기</button>
             <a href={windowsInstallerUrl()} style={{ textDecoration: 'none', textAlign: 'center', padding: '10px 18px', borderRadius: 999, border: `1px solid ${C.border2}`, background: 'rgba(0,0,0,0.18)', color: C.muted, fontFamily: "'Pretendard', system-ui, sans-serif", fontSize: 11, fontWeight: 800 }}>Windows 다운로드</a>
           </div>
         </div>
       )}
+      {installPromptOpen && <InstallPromptModal onClose={() => setInstallPromptOpen(false)} />}
       {appPicker && data && (
         <AppPickerModal
           category={appPicker}
