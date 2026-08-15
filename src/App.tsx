@@ -314,7 +314,23 @@ export default function App() {
 
   useEffect(() => {
     if (!user) return
-    api.challenge().then(setChallenge).catch(() => setChallenge(null))
+    let alive = true
+    const loadChallenge = () => {
+      api.challenge()
+        .then((next) => { if (alive) setChallenge(next) })
+        .catch(() => { if (alive) setChallenge(null) })
+    }
+    loadChallenge()
+    const interval = window.setInterval(loadChallenge, 60000)
+    const onVisibilityChange = () => {
+      if (!document.hidden) loadChallenge()
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      alive = false
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
   }, [user])
 
   const logout = async () => {
