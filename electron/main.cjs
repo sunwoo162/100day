@@ -2,6 +2,7 @@ const { app, BrowserWindow, Menu, Tray, shell, session, nativeTheme } = require(
 const { spawn } = require('node:child_process')
 const fs = require('node:fs')
 const path = require('node:path')
+const packageJson = require('../package.json')
 
 const appRootDir = path.resolve(__dirname, '..')
 const rootDir = app.isPackaged ? path.join(process.resourcesPath, 'app') : appRootDir
@@ -35,6 +36,7 @@ if (!gotSingleInstanceLock) {
 function withDesktopFlag(url) {
   const parsed = new URL(url)
   parsed.searchParams.set('desktop', '1')
+  parsed.searchParams.set('appVersion', packageJson.version || '0')
   return parsed.toString()
 }
 
