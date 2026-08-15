@@ -646,6 +646,26 @@ const server = http.createServer(async (req, res) => {
       return json(res, 201, db.prepare('SELECT id, name FROM study_categories WHERE user_id = ? AND name = ?').get(user.id, name))
     }
 
+    if (url.pathname === '/api/study/settings' && req.method === 'GET') {
+      const user = requireUser(req, res); if (!user) return
+      const settings = db.prepare('SELECT daily_focus_goal_minutes FROM user_settings WHERE user_id = ?').get(user.id)
+      return json(res, 200, { daily_focus_goal_minutes: settings?.daily_focus_goal_minutes ?? 240 })
+    }
+
+    if (url.pathname === '/api/study/settings' && req.method === 'POST') {
+      const user = requireUser(req, res); if (!user) return
+      const body = await readBody(req)
+      const goal = Math.max(1, Math.min(1440, Math.round(Number(body.daily_focus_goal_minutes || 0))))
+      if (!goal) return json(res, 400, { error: '오늘 목표 시간이 필요합니다' })
+      const now = new Date().toISOString()
+      db.prepare(`
+        INSERT INTO user_settings (user_id, daily_focus_goal_minutes, updated_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET daily_focus_goal_minutes = excluded.daily_focus_goal_minutes, updated_at = excluded.updated_at
+      `).run(user.id, goal, now)
+      return json(res, 200, { daily_focus_goal_minutes: goal })
+    }
+
     if (url.pathname === '/api/focus/sessions' && req.method === 'GET') {
       const user = requireUser(req, res); if (!user) return
       const challenge = getUserChallenge(user.id)

@@ -88,6 +88,26 @@ function fmtDelta(delta: number, unit = '분') {
   return `어제보다 ${delta > 0 ? '+' : '-'}${Math.abs(delta).toLocaleString()}${unit}`
 }
 
+function parseGoalMinutes(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed) return 0
+  const [hoursRaw, minutesRaw] = trimmed.split(':')
+  if (minutesRaw !== undefined) {
+    const hours = Number(hoursRaw)
+    const minutes = Number(minutesRaw)
+    if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return 0
+    return Math.max(0, Math.min(1440, Math.round(hours * 60 + minutes)))
+  }
+  const numeric = Number(trimmed)
+  if (!Number.isFinite(numeric)) return 0
+  return Math.max(0, Math.min(1440, Math.round(numeric * 60)))
+}
+
+function goalMinutesToInput(minutes: number) {
+  const safe = Math.max(1, Math.min(1440, Math.round(minutes || 240)))
+  return `${Math.floor(safe / 60)}:${String(safe % 60).padStart(2, '0')}`
+}
+
 function parseHourValue(display: string) {
   const hours = display.match(/(\d+)h/)?.[1] ?? '0'
   const mins = display.match(/(\d+)m/)?.[1] ?? '0'
@@ -1078,6 +1098,9 @@ function FocusPage({ currentDay }: { currentDay: number }) {
   const [categories, setCategories] = useState<StudyCategory[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [goalMins, setGoalMins] = useState(240)
+  const [goalInput, setGoalInput] = useState('4:00')
+  const [goalSaving, setGoalSaving] = useState(false)
   const ref = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const totalMins = sessions.reduce((a, s) => a + s.duration_minutes, 0) + Math.floor(secs / 60)
@@ -1088,6 +1111,12 @@ function FocusPage({ currentDay }: { currentDay: number }) {
       .then((items) => {
         setCategories(items)
         if (items[0]) setCat(items[0].name)
+      })
+      .catch((err) => setError(err.message))
+    api.studySettings()
+      .then((settings) => {
+        setGoalMins(settings.daily_focus_goal_minutes)
+        setGoalInput(goalMinutesToInput(settings.daily_focus_goal_minutes))
       })
       .catch((err) => setError(err.message))
   }, [currentDay])
@@ -1146,7 +1175,25 @@ function FocusPage({ currentDay }: { currentDay: number }) {
       setError(err instanceof Error ? err.message : '카테고리 추가 실패')
     }
   }
-  const goalMins = 240
+  const saveGoal = async () => {
+    const parsed = parseGoalMinutes(goalInput)
+    if (!parsed) {
+      setError('목표 시간은 1분 이상으로 입력하세요')
+      setGoalInput(goalMinutesToInput(goalMins))
+      return
+    }
+    setGoalSaving(true)
+    try {
+      const saved = await api.updateStudySettings({ daily_focus_goal_minutes: parsed })
+      setGoalMins(saved.daily_focus_goal_minutes)
+      setGoalInput(goalMinutesToInput(saved.daily_focus_goal_minutes))
+      setError('')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '목표 시간 저장 실패')
+    } finally {
+      setGoalSaving(false)
+    }
+  }
 
   return (
     <div style={{ padding: '40px 36px', maxWidth: 600, margin: '0 auto' }}>
@@ -1212,10 +1259,23 @@ function FocusPage({ currentDay }: { currentDay: number }) {
 
       {/* Daily goal bar */}
       <div style={{ background: C.raised, borderRadius: 14, padding: '16px 20px', border: `1px solid ${C.border}`, marginBottom: 20 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-          <span style={{ fontSize: 11, color: C.alt }}>오늘 목표</span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 8, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 11, color: C.alt }}>오늘 목표</span>
+            <input
+              value={goalInput}
+              onChange={e => setGoalInput(e.target.value)}
+              onBlur={saveGoal}
+              onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+              placeholder="4:00"
+              style={{ width: 64, padding: '5px 7px', background: C.surface, border: `1px solid ${C.border2}`, borderRadius: 7, color: C.white, fontFamily: "'JetBrains Mono', monospace", fontSize: 11, outline: 'none' }}
+            />
+            <button onClick={saveGoal} disabled={goalSaving} style={{ border: 'none', borderRadius: 999, background: 'rgba(0,232,197,0.08)', color: C.mint, padding: '5px 9px', fontSize: 10, fontWeight: 800, cursor: goalSaving ? 'default' : 'pointer', fontFamily: "'Pretendard', system-ui, sans-serif" }}>
+              {goalSaving ? '저장 중' : '저장'}
+            </button>
+          </div>
           <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: totalMins >= goalMins ? C.mint : C.muted }}>
-            {Math.floor(totalMins / 60)}시간 {totalMins % 60}분 / 4시간 00분
+            {Math.floor(totalMins / 60)}시간 {totalMins % 60}분 / {Math.floor(goalMins / 60)}시간 {String(goalMins % 60).padStart(2, '0')}분
           </span>
         </div>
         <div style={{ height: 4, background: C.border, borderRadius: 2 }}>
